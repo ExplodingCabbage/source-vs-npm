@@ -1,0 +1,15 @@
+{
+  "name": "source-vs-npm",
+  "version": "1.0.0",
+  "description": "A tool to check that the most popular npm packages contain what you get when you build them from source.",
+  "license": "ISC",
+  "author": "",
+  "type": "module",
+  "main": "auditAll.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "download-counts": "npm:@explodingcabbage/counts@^2.20250515.0"
+  }
+}

@@ -1,3 +1,10 @@
+# TODO
+
+* write everything
+* use real download-counts package
+
+# source-vs-npm
+
 A tool to check that the most popular npm packages contain what you get when you build them from source.
 
 Entry point is `auditAll.js`. When this is run:
@@ -12,9 +19,9 @@ Entry point is `auditAll.js`. When this is run:
     * Clone the repo and attempt to build it. (TODO: more detail here - how do we determine how to build it? Do we try multiple candidate commands?) If the build fails, abort with an error.
     * Pack the result (with `npm pack`, `yarn pack`, etc), and store the packed result in a directory visible from the host machine.
   * Compare the result against the published tarball, downloaded from npm. (TODO: details on metadata. Is it expected to differ?) If it differs, abort with an error and save the diff where it can be reviewed later.
-  
+
   Any errors in this step are recorded to a result file in the version directory. All output is also saved to a log file.
-  
+
 2. A HTML table is generated summarising the results from the data. For each package, the table notes:
   * the latest version
   * whether the test above passed, and if not, what error happened, out of the following possibilities:
