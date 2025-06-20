@@ -26,7 +26,7 @@ if (
  * error: either a caught error object (which will be logged with stack trace)
  *        or a string (which will just be logged).
  */
-class BuildFailed extends Error {
+class JobFailed extends Error {
   constructor(category, msgOrError) {
     this.category = category;
     if (msgOrError instanceof Error) {
@@ -72,19 +72,16 @@ async function auditPackage(packageName) {
       );
       const registryRespJson = await resp.json();
     } catch (e) {
-      throw BuildFailed("reg fetch failed", e);
+      throw JobFailed("reg fetch failed", e);
     }
 
     const version = registryRespJson.version;
     const tarballUrl = registryRespJson.dist.tarball;
     if (!registryRespJson.repository) {
-      throw BuildFailed(
-        "no repository",
-        "repository field in registry was null",
-      );
+      throw JobFailed("no repository", "repository field in registry was null");
     }
     if (registryRespJson.repository.type != "git") {
-      throw BuildFailed("not git", `repository.type was ${repository.type}`);
+      throw JobFailed("not git", `repository.type was ${repository.type}`);
     }
 
     // Create (if not exists) a folder to download this version to:
@@ -112,7 +109,7 @@ async function auditPackage(packageName) {
     // TODO: run it here
   } catch (e) {
     let category, msg;
-    if (e instanceof BuildFailed) {
+    if (e instanceof JobFailed) {
       category = e.category;
       msg = e.msg;
     } else {

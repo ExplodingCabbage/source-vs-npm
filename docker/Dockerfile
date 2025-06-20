@@ -17,7 +17,9 @@ FROM node:22
 USER node
 WORKDIR /home/node
 
-# Folder we'll put the built tarball in to share it with the host
+# Folder we use to share one of two things with the host:
+# 1. the built and packed tarball, if the build succeeds, or
+# 2. a structured error, if the build fails
 RUN mkdir -p /home/node/build
 # TODO: Why do we have to do this next bit? Does it even have an effect? I am
 #       cargo-culting based on what Claude generated for me, but don't know
