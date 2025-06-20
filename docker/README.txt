@@ -1,0 +1,1 @@
+To avoid the host machine getting pwned, we run the actual build step inside a Docker container - see auditAll.js for context. All code related to doing that lives in this folder.

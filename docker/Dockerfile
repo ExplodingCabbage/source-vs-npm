@@ -1,0 +1,32 @@
+# Docs for base image: https://github.com/nodejs/docker-node
+FROM node:22
+
+# TODO: Uncomment the below if we actually need to install anything. Currently,
+#       crazily, we don't!
+# Install stuff we'll always or usually need for running builds, so we don't
+# need to redo this for every package.
+# Note the cleanup at the end is recommended by
+# https://docs.docker.com/build/building/best-practices/#run
+# RUN apt-get update && apt-get install -y \
+#     somepackagewotweneed \
+#     && rm -rf /var/lib/apt/lists/*
+
+# These base images come with a non-root `node` user. We use that user for
+# builds just in case we need to use any tools that freak out about being run
+# as root (and because it has a clean home directory e can work in).
+USER node
+WORKDIR /home/node
+
+# Folder we'll put the built tarball in to share it with the host
+RUN mkdir -p /home/node/build
+# TODO: Why do we have to do this next bit? Does it even have an effect? I am
+#       cargo-culting based on what Claude generated for me, but don't know
+#       what this is actually for.
+VOLUME ["/home/node/build"]
+
+# Copy in the script we want the container to run:
+COPY buildPackage.js /home/node/buildPackage.js
+
+# Make the script the default command.
+# This expects two arguments - a repo path and a version number
+ENTRYPOINT ["node", "/home/node/buildPackage.js"]

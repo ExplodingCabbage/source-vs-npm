@@ -61,13 +61,6 @@ async function auditPackage(packageName) {
     logStream.write(msg + "\n");
   }
 
-  async function writeResultJson() {
-    await fs.promises.writeFile(
-      `${packageDir}/results.json`,
-      JSON.stringify(resultJson),
-    );
-  }
-
   // Now that we've got logging set up, everything else happens in a massive
   // try/catch/finally block that logs any failures.
   try {
@@ -93,6 +86,30 @@ async function auditPackage(packageName) {
     if (registryRespJson.repository.type != "git") {
       throw BuildFailed("not git", `repository.type was ${repository.type}`);
     }
+
+    // Create (if not exists) a folder to download this version to:
+    const versionDir = `${packageDir}/${version}`;
+    await mkdir(versionDir, { recursive: true });
+    // The source code from GitHub:
+    const sourceDir = `${versionDir}/source`;
+    await mkdir(sourceDir, { recursive: true });
+    // The version published to npm:
+    const publishedDir = `${versionDir}/published`;
+    await mkdir(publishedDir, { recursive: true });
+    // The result of running the build ourselves (SHOULD match /published):
+    const buildDir = `${versionDir}/build`;
+    await mkdir(buildDir, { recursive: true });
+
+    // TODO: Spec says to check for an existing build here and skip if there is
+    //       one. Is that actually reasonable? Probably we should just check if
+    //       the package has passed the audit (earlier); if so, skip everything,
+    //       if not, do everything.
+
+    // We need to clone the source and try to build it... but that involves
+    // running arbitrary untrusted code, so we do it inside a Docker container,
+    // created from the image we built earlier.
+    // TODO: build it earlier
+    // TODO: run it here
   } catch (e) {
     let category, msg;
     if (e instanceof BuildFailed) {
@@ -112,6 +129,11 @@ async function auditPackage(packageName) {
     log("Failed with error category", category);
     log(msg);
     resultJson.errorCategory = category;
-    await writeResultJson();
+  } finally {
+    // Write the results to disk:
+    await fs.promises.writeFile(
+      `${packageDir}/results.json`,
+      JSON.stringify(resultJson),
+    );
   }
 }
