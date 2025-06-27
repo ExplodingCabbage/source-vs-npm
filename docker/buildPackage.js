@@ -69,6 +69,7 @@ try {
 
   // Move the final tgz to host-bound output folder we set up in the Dockerfile
   fs.rename(finalTgz, "/home/node/build/");
+  console.log("Successfully wrote packed .tgz file to the build directory");
 } catch (e) {
   let errJson;
   if (e instanceof BuildFailed) {

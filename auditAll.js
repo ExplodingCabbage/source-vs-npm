@@ -1,6 +1,8 @@
+import { promisify } from "node:util";
+import { exec, execFile } from "node:child_process";
 import downloadCounts from "download-counts" with { type: "json" };
-import { mkdir } from "fs/promises";
-import { createFileStream } from "node:fs";
+import { mkdir, readFile, rm } from "node:fs/promises";
+import { createFileStream, existsSync } from "node:fs";
 
 const N_PACKAGES = 5000;
 
@@ -19,6 +21,29 @@ if (
 ) {
   throw `unexpected naughty package name in top ${N_PACKAGES}: ${packageName}`;
 }
+
+async function run(...command) {
+  return await promisify(execFile)(command);
+}
+
+/**
+ * Run the given command as a shell command, redirecting stderr to stdout so
+ * that output will be interleaved.
+ */
+async function runShell(...command) {
+  return await promisify(exec)(command.map(escapeShellArg).join(" ") + " 2>&1");
+}
+
+// Nicked from https://stackoverflow.com/a/22827128/1709587
+function escapeShellArg(arg) {
+  return `'${arg.replace(/'/g, `'\\''`)}'`;
+}
+
+// Before we begin, make sure we have an up-to-date version of the Docker image
+// we use for running untrusted build scripts in
+const dockerDir = `${import.meta.dirname}/docker`;
+const imageId = (await run("sudo", "docker", "build", "--quiet", dockerDir))
+  .stdout;
 
 /**
  * category: short (e.g. 1 or 2 word) summary used to categorise the error in
@@ -84,17 +109,17 @@ async function auditPackage(packageName) {
       throw JobFailed("not git", `repository.type was ${repository.type}`);
     }
 
-    // Create (if not exists) a folder to download this version to:
+    // Create (if not exists) a folder to audit this version in:
     const versionDir = `${packageDir}/${version}`;
     await mkdir(versionDir, { recursive: true });
-    // The source code from GitHub:
-    const sourceDir = `${versionDir}/source`;
-    await mkdir(sourceDir, { recursive: true });
     // The version published to npm:
     const publishedDir = `${versionDir}/published`;
     await mkdir(publishedDir, { recursive: true });
-    // The result of running the build ourselves (SHOULD match /published):
+    // The result of running the build ourselves (SHOULD match /published)
     const buildDir = `${versionDir}/build`;
+    // We clear away any existing content here before proceeding so the
+    // container can do a fresh build untainted by previous attempts:
+    await rm(buildDir, { recursive: true, force: true });
     await mkdir(buildDir, { recursive: true });
 
     // TODO: Spec says to check for an existing build here and skip if there is
@@ -102,11 +127,37 @@ async function auditPackage(packageName) {
     //       the package has passed the audit (earlier); if so, skip everything,
     //       if not, do everything.
 
-    // We need to clone the source and try to build it... but that involves
+    // We need to clone the source and try to build it... but that entails
     // running arbitrary untrusted code, so we do it inside a Docker container,
     // created from the image we built earlier.
-    // TODO: build it earlier
-    // TODO: run it here
+    // We "bind mount" an empty folder on the host to the container for the
+    // container to write results to:
+    console.log("Running build inside Docker. Output:");
+    output = (
+      await runShell(
+        "docker",
+        "run",
+        "--mount",
+        `type=bind,src=${buildDir},dst=/home/node/build`,
+        imageId,
+        packageName,
+        version,
+      )
+    ).stdout;
+    console.log(output);
+
+    errorJsonPath = `${buildDir}/error.json`;
+    if (existsSync(errorJsonPath)) {
+      const buildErrorCode = JSON.parse(
+        await readFile(errorJsonPath),
+      ).errorCode;
+      throw new JobFailed(
+        `build:${buildErrorCode}`,
+        `Build failed and reported error code ${buildErrorCode}`,
+      );
+    }
+
+    // TODO: Find and unpack the tarball!
   } catch (e) {
     let category, msg;
     if (e instanceof JobFailed) {
