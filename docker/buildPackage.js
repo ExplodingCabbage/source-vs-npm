@@ -19,7 +19,7 @@ const [gitUrl, version] = scriptArgs;
 console.log("Attempting to fetch and build version", version, "of", gitUrl);
 
 async function run(...command) {
-  return await promisify(execFile)(command);
+  return await promisify(execFile)(command[0], command.slice(1));
 }
 
 async function git(...command) {

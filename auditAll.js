@@ -1,7 +1,7 @@
 import { promisify } from "node:util";
 import { exec, execFile } from "node:child_process";
 import downloadCounts from "download-counts" with { type: "json" };
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { mkdir, readFile, rm, readdir } from "node:fs/promises";
 import { createFileStream, existsSync } from "node:fs";
 
 const N_PACKAGES = 5000;
@@ -23,7 +23,7 @@ if (
 }
 
 async function run(...command) {
-  return await promisify(execFile)(command);
+  return await promisify(execFile)(command[0], command.slice(1));
 }
 
 /**
@@ -157,7 +157,27 @@ async function auditPackage(packageName) {
       );
     }
 
-    // TODO: Find and unpack the tarball!
+    // If the build script didn't output an error, it will have output a
+    // tarball containing the packed files (and this will be the only thing in
+    // the build dir):
+    const buildDirContents = await readdir(buildDir);
+    if (buildDirContents.length != 1) {
+      throw "unexpected /build contents: " + buildDirContents;
+    }
+    const [tgzFilename] = buildDirContents;
+    if (!tgzFilename.endsWith('.tgz'))) {
+      throw "unexpected filename in /build: " + tgzFilename;
+    }
+
+    await run('tar', '-xzf', `${buildDir}/${tgzFilename}`);
+    await rm(`${buildDir}/${tgzFilename}`);
+
+    // If we successfully ran a build, next we need to download the version
+    // published on npm to compare against
+    // TODO: Do that
+
+    // TODO: Store diffs for review
+    await run('diff', buildDir, publishedDir);
   } catch (e) {
     let category, msg;
     if (e instanceof JobFailed) {
