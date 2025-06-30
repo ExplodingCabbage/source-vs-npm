@@ -102,6 +102,9 @@ async function auditPackage(packageName) {
 
     const version = registryRespJson.version;
     const tarballUrl = registryRespJson.dist.tarball;
+    if (!tarballUrl.endsWith('.tgz')) {
+      throw "Unexpected tarball URL format. Value was: " + tarballUrl;
+    }
     if (!registryRespJson.repository) {
       throw JobFailed("no repository", "repository field in registry was null");
     }
@@ -174,10 +177,18 @@ async function auditPackage(packageName) {
 
     // If we successfully ran a build, next we need to download the version
     // published on npm to compare against
-    // TODO: Do that
+    await run('wget', tarballUrl, '-O', publishedDir);
+    const tarballFilename = tarballUrl.split('/').pop()
+    await run('tar', '-xzf', tarballFilename);
 
-    // TODO: Store diffs for review
-    await run('diff', buildDir, publishedDir);
+    // npm tarballs always have a top-level "package/" directory, so the final
+    // step is to diff those against each other:
+    // TODO: store the diff for later comparison; don't crash here
+    await run('diff', `${buildDir}/package`, `${publishedDir}/package`);
+
+    // If we've made it here, then the published files were identical to what
+    // we got building from source - hooray!
+    // TODO: Write success
   } catch (e) {
     let category, msg;
     if (e instanceof JobFailed) {
