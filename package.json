@@ -10,6 +10,6 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "download-counts": "npm:@explodingcabbage/counts@^2.20250515.0"
+    "download-counts": "*"
   }
 }

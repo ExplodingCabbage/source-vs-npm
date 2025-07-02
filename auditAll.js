@@ -1,15 +1,18 @@
 import { promisify } from "node:util";
 import { exec, execFile } from "node:child_process";
-import downloadCounts from "download-counts" with { type: "json" };
 import { mkdir, readFile, rm, readdir } from "node:fs/promises";
-import { createFileStream, existsSync } from "node:fs";
+import { createWriteStream, existsSync } from "node:fs";
+import downloadCounts from "download-counts" with { type: "json" };
 
-const N_PACKAGES = 5000;
+// TODO: 5000
+const N_PACKAGES = 50;
 
 const packageNames = Object.entries(downloadCounts)
   .filter(([_, count]) => count)
   .sort(([_, countA], [__, countB]) => countB - countA)
-  .slice(0, N_PACKAGES);
+  .slice(0, N_PACKAGES)
+  .map(([name, _]) => name)
+  .reverse(); // We'll use this as a queue & pop() from it, most important first
 
 // Assert there are no naughty package names we can't use as directory paths:
 if (
@@ -77,7 +80,7 @@ async function auditPackage(packageName) {
   };
 
   // Create a log file. Timestamp in name avoids overwriting old ones.
-  const logStream = createFileStream(
+  const logStream = createWriteStream(
     `${packageName}-${resultJson.startTime}.log`,
   );
 
@@ -102,7 +105,7 @@ async function auditPackage(packageName) {
 
     const version = registryRespJson.version;
     const tarballUrl = registryRespJson.dist.tarball;
-    if (!tarballUrl.endsWith('.tgz')) {
+    if (!tarballUrl.endsWith(".tgz")) {
       throw "Unexpected tarball URL format. Value was: " + tarballUrl;
     }
     if (!registryRespJson.repository) {
@@ -168,27 +171,27 @@ async function auditPackage(packageName) {
       throw "unexpected /build contents: " + buildDirContents;
     }
     const [tgzFilename] = buildDirContents;
-    if (!tgzFilename.endsWith('.tgz'))) {
+    if (!tgzFilename.endsWith(".tgz")) {
       throw "unexpected filename in /build: " + tgzFilename;
     }
 
-    await run('tar', '-xzf', `${buildDir}/${tgzFilename}`);
+    await run("tar", "-xzf", `${buildDir}/${tgzFilename}`);
     await rm(`${buildDir}/${tgzFilename}`);
 
     // If we successfully ran a build, next we need to download the version
     // published on npm to compare against
-    await run('wget', tarballUrl, '-O', publishedDir);
-    const tarballFilename = tarballUrl.split('/').pop()
-    await run('tar', '-xzf', tarballFilename);
+    await run("wget", tarballUrl, "-O", publishedDir);
+    const tarballFilename = tarballUrl.split("/").pop();
+    await run("tar", "-xzf", tarballFilename);
 
     // npm tarballs always have a top-level "package/" directory, so the final
     // step is to diff those against each other:
     // TODO: store the diff for later comparison; don't crash here
-    await run('diff', `${buildDir}/package`, `${publishedDir}/package`);
+    await run("diff", `${buildDir}/package`, `${publishedDir}/package`);
 
     // If we've made it here, then the published files were identical to what
     // we got building from source - hooray!
-    // TODO: Write success
+    resultJson.contentMatches = true;
   } catch (e) {
     let category, msg;
     if (e instanceof JobFailed) {
@@ -216,3 +219,17 @@ async function auditPackage(packageName) {
     );
   }
 }
+
+const MAX_SIMULTANEOUS_AUDITS = 5;
+async function doAuditsUntilFinished() {
+  while (packageNames.length > 0) {
+    await auditPackage(packageNames.pop());
+  }
+}
+
+const workers = [];
+for (let i = 0; i < MAX_SIMULTANEOUS_AUDITS; i++) {
+  workers.push(doAuditsUntilFinished());
+}
+
+await Promise.all(workers);
