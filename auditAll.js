@@ -1,6 +1,6 @@
 import { promisify } from "node:util";
 import { exec, execFile } from "node:child_process";
-import { mkdir, readFile, rm, readdir } from "node:fs/promises";
+import { mkdir, readFile, writeFile, rm, readdir } from "node:fs/promises";
 import { createWriteStream, existsSync } from "node:fs";
 import downloadCounts from "download-counts" with { type: "json" };
 
@@ -100,7 +100,7 @@ async function auditPackage(packageName) {
       );
       const registryRespJson = await resp.json();
     } catch (e) {
-      throw JobFailed("reg fetch failed", e);
+      throw new JobFailed("reg fetch failed", e);
     }
 
     const version = registryRespJson.version;
@@ -109,10 +109,13 @@ async function auditPackage(packageName) {
       throw "Unexpected tarball URL format. Value was: " + tarballUrl;
     }
     if (!registryRespJson.repository) {
-      throw JobFailed("no repository", "repository field in registry was null");
+      throw new JobFailed(
+        "no repository",
+        "repository field in registry was null",
+      );
     }
     if (registryRespJson.repository.type != "git") {
-      throw JobFailed("not git", `repository.type was ${repository.type}`);
+      throw new JobFailed("not git", `repository.type was ${repository.type}`);
     }
 
     // Create (if not exists) a folder to audit this version in:
@@ -213,10 +216,7 @@ async function auditPackage(packageName) {
     resultJson.errorCategory = category;
   } finally {
     // Write the results to disk:
-    await fs.promises.writeFile(
-      `${packageDir}/results.json`,
-      JSON.stringify(resultJson),
-    );
+    await writeFile(`${packageDir}/results.json`, JSON.stringify(resultJson));
   }
 }
 
