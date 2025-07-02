@@ -1,3 +1,4 @@
+import process from "node:process";
 import { promisify } from "node:util";
 import { execFile } from "node:child_process";
 import fs from "node:fs";
@@ -23,11 +24,12 @@ async function run(...command) {
 }
 
 async function git(...command) {
-  return await run("git");
+  return await run("git", ...command);
 }
 
 class BuildFailed extends Error {
   constructor(errorCode) {
+    super();
     this.errorCode = errorCode;
   }
 }
@@ -44,7 +46,7 @@ try {
       await git(["checkout", `refs/tags/${tagName}`]);
       tagExisted = tagName;
       break;
-    } catch (e) {
+    } catch {
       continue;
     }
   }
