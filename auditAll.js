@@ -15,14 +15,13 @@ const packageNames = Object.entries(downloadCounts)
   .reverse(); // We'll use this as a queue & pop() from it, most important first
 
 // Assert there are no naughty package names we can't use as directory paths:
-if (
-  packageNames.some(
-    (packageName) =>
-      packageName.split("/").includes(".") ||
-      packageName.split("/").includes(".."),
-  )
-) {
-  throw `unexpected naughty package name in top ${N_PACKAGES}: ${packageName}`;
+for (const packageName of packageNames) {
+  if (
+    packageName.split("/").includes(".") ||
+    packageName.split("/").includes("..")
+  ) {
+    throw `unexpected naughty package name in top ${N_PACKAGES}: ${packageName}`;
+  }
 }
 
 async function run(...command) {
@@ -56,14 +55,15 @@ const imageId = (await run("sudo", "docker", "build", "--quiet", dockerDir))
  */
 class JobFailed extends Error {
   constructor(category, msgOrError) {
+    super();
     this.category = category;
     if (msgOrError instanceof Error) {
       this.msg = `Caused by ${msgOrError.__proto__.name}: ${msgOrError.message}`;
       if (msgOrError.stack) {
-        msg += "\n" + msgOrError.stack;
+        this.msg += "\n" + msgOrError.stack;
       }
     } else {
-      this.msg = msg;
+      this.msg = msgOrError;
     }
   }
 }
@@ -98,7 +98,7 @@ async function auditPackage(packageName) {
       const resp = await fetch(
         `https://registry.npmjs.org/${packageName}/latest`,
       );
-      const registryRespJson = await resp.json();
+      registryRespJson = await resp.json();
     } catch (e) {
       throw new JobFailed("reg fetch failed", e);
     }
@@ -115,7 +115,10 @@ async function auditPackage(packageName) {
       );
     }
     if (registryRespJson.repository.type != "git") {
-      throw new JobFailed("not git", `repository.type was ${repository.type}`);
+      throw new JobFailed(
+        "not git",
+        `repository.type was ${registryRespJson.repository.type}`,
+      );
     }
 
     // Create (if not exists) a folder to audit this version in:
@@ -142,7 +145,7 @@ async function auditPackage(packageName) {
     // We "bind mount" an empty folder on the host to the container for the
     // container to write results to:
     console.log("Running build inside Docker. Output:");
-    output = (
+    const output = (
       await runShell(
         "docker",
         "run",
@@ -155,7 +158,7 @@ async function auditPackage(packageName) {
     ).stdout;
     console.log(output);
 
-    errorJsonPath = `${buildDir}/error.json`;
+    const errorJsonPath = `${buildDir}/error.json`;
     if (existsSync(errorJsonPath)) {
       const buildErrorCode = JSON.parse(
         await readFile(errorJsonPath),
