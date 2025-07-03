@@ -44,8 +44,9 @@ function escapeShellArg(arg) {
 // Before we begin, make sure we have an up-to-date version of the Docker image
 // we use for running untrusted build scripts in
 const dockerDir = `${import.meta.dirname}/docker`;
-const imageId = (await run("sudo", "docker", "build", "--quiet", dockerDir))
-  .stdout;
+const imageId = (
+  await run("sudo", "docker", "build", "--quiet", dockerDir)
+).stdout.trim();
 
 /**
  * category: short (e.g. 1 or 2 word) summary used to categorise the error in
@@ -70,7 +71,7 @@ class JobFailed extends Error {
 
 async function auditPackage(packageName) {
   // Create (if not exists) a folder for results/logs/diffs about this package:
-  const packageDir = `${import.meta.dirname}/${packageName}`;
+  const packageDir = `${import.meta.dirname}/audits/${packageName}`;
   await mkdir(packageDir, { recursive: true });
 
   // A summary of this run we will write to `packageDir`:
@@ -81,12 +82,16 @@ async function auditPackage(packageName) {
 
   // Create a log file. Timestamp in name avoids overwriting old ones.
   const logStream = createWriteStream(
-    `${packageName}-${resultJson.startTime}.log`,
+    `${packageDir}/${resultJson.startTime}.log`,
   );
 
   // Create functions for logging and for writing final audit results:
-  function log(msg) {
-    logStream.write(msg + "\n");
+  function log(...msg) {
+    msg.reverse();
+    while (msg.length) {
+      logStream.write(msg.pop().toString());
+      logStream.write(msg.length > 0 ? " " : "\n");
+    }
   }
 
   // Now that we've got logging set up, everything else happens in a massive
@@ -144,19 +149,20 @@ async function auditPackage(packageName) {
     // created from the image we built earlier.
     // We "bind mount" an empty folder on the host to the container for the
     // container to write results to:
-    console.log("Running build inside Docker. Output:");
+    log("Running build inside Docker. Output:");
     const output = (
       await runShell(
+        "sudo",
         "docker",
         "run",
         "--mount",
         `type=bind,src=${buildDir},dst=/home/node/build`,
         imageId,
-        packageName,
+        registryRespJson.repository.url,
         version,
       )
     ).stdout;
-    console.log(output);
+    log(output);
 
     const errorJsonPath = `${buildDir}/error.json`;
     if (existsSync(errorJsonPath)) {
@@ -206,10 +212,7 @@ async function auditPackage(packageName) {
     } else {
       category = "unexpected crash";
       if (e instanceof Error) {
-        msg = `${e.__proto__.name}: ${e.message}`;
-        if (e.stack) {
-          msg += "\n" + e.stack;
-        }
+        msg = e.stack;
       } else {
         msg = e;
       }

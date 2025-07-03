@@ -83,10 +83,7 @@ try {
     // to a file by auditAll.js)
     console.error("Build failed with unexpected error:");
     if (e instanceof Error) {
-      console.error(`${e.__proto__.name}: ${e.message}`);
-      if (e.stack) {
-        console.error(e.stack);
-      }
+      console.error(e.stack);
     } else {
       console.error(e);
     }
