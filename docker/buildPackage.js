@@ -46,13 +46,16 @@ try {
       await git(["checkout", `refs/tags/${tagName}`]);
       tagExisted = tagName;
       break;
-    } catch {
+    } catch (e) {
+      console.log(`Attempted to checkout ${tagName}; got this output:`);
+      console.log("stdout:", e.stdout);
+      console.log("stderr:", e.stderr);
       continue;
     }
   }
   if (!tagExisted) {
     console.error("Couldn't find a Git tag matching the npm version");
-    throw BuildFailed("no tag match");
+    throw new BuildFailed("no tag match");
   }
   console.log("Checked out", tagExisted);
 

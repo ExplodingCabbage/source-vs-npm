@@ -126,6 +126,32 @@ async function auditPackage(packageName) {
       );
     }
 
+    // The "repository" field returned from the npm API always have a `git+`
+    // prefix:
+    // {
+    //   "repository": {
+    //     "type": "git",
+    //     "url": "git+https://github.com/npm/cli.git"
+    //   }
+    // }
+    //
+    // We need to remove this git+" prefix before we can actually use the
+    // URL. No idea why the prefix is there at all; it's redundant given the
+    // "type" field and contradicts the explicit statement in the docs at
+    // https://docs.npmjs.com/cli/v11/configuring-npm/package-json that:
+    //
+    // > The URL should be a ... URL that can be handed directly to a VCS
+    // > program without any modification
+    //
+    // Dumb, but it is what it is.
+    let repoUrl = registryRespJson.repository.url.replace(/^git\+/, "");
+    // The next complication is that most repos are hosted on GitHub and lots
+    // of package.json files still refer to the repo using the git:// protocol
+    // that GitHub dropped support for in 2022 (see discussion at
+    // https://github.com/kpdecker/jsdiff/pull/622 where I fixed this for
+    // jsdiff). So we need to correct those to a usable protocol:
+    repoUrl = repoUrl.replace(/^git:\/\//, "https://");
+
     // Create (if not exists) a folder to audit this version in:
     const versionDir = `${packageDir}/${version}`;
     await mkdir(versionDir, { recursive: true });
@@ -158,7 +184,7 @@ async function auditPackage(packageName) {
         "--mount",
         `type=bind,src=${buildDir},dst=/home/node/build`,
         imageId,
-        registryRespJson.repository.url,
+        repoUrl,
         version,
       )
     ).stdout;
