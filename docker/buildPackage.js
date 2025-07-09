@@ -43,7 +43,7 @@ try {
   let tagExisted = false;
   for (const tagName of [version, `v${version}`]) {
     try {
-      await git(["checkout", `refs/tags/${tagName}`]);
+      await git("checkout", `refs/tags/${tagName}`);
       tagExisted = tagName;
       break;
     } catch (e) {
