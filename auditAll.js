@@ -213,14 +213,21 @@ async function auditPackage(packageName) {
       throw "unexpected filename in /build: " + tgzFilename;
     }
 
-    await run("tar", "-xzf", `${buildDir}/${tgzFilename}`);
-    await rm(`${buildDir}/${tgzFilename}`);
+    await run("tar", "-C", buildDir, "-xzf", `${buildDir}/${tgzFilename}`);
+    // TODO: Tar does this itself no?
+    //await rm(`${buildDir}/${tgzFilename}`);
 
     // If we successfully ran a build, next we need to download the version
     // published on npm to compare against
-    await run("wget", tarballUrl, "-O", publishedDir);
     const tarballFilename = tarballUrl.split("/").pop();
-    await run("tar", "-xzf", tarballFilename);
+    await run("wget", tarballUrl, "-O", `${publishedDir}/${tarballFilename}`);
+    await run(
+      "tar",
+      "-C",
+      publishedDir,
+      "-xzf",
+      `${publishedDir}/${tarballFilename}`,
+    );
 
     // npm tarballs always have a top-level "package/" directory, so the final
     // step is to diff those against each other:
