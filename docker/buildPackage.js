@@ -2,6 +2,7 @@ import process from "node:process";
 import { promisify } from "node:util";
 import { execFile } from "node:child_process";
 import fs from "node:fs";
+import { readFile, copyFile } from "node:fs/promises";
 
 const scriptArgs = process.argv.slice(2);
 
@@ -37,7 +38,9 @@ class BuildFailed extends Error {
 // Giant try/catch that all the logic runs in. If we get an error, we stick it
 // in an error.json file.
 try {
-  await git("clone", gitUrl);
+  await git("clone", gitUrl, "gitrepo");
+  process.chdir("gitrepo");
+
   // A version number on npm of `1.2.3` might correspond to a tag on GitHub of
   // `v1.2.3`, so we try both
   let tagExisted = false;
@@ -59,21 +62,31 @@ try {
   }
   console.log("Checked out", tagExisted);
 
-  // TODO: The stuff below needs generalising to more kinds of repo; loads will
-  //       probably fail. Essentially a placeholder right now.
-  //       Also we should actually programatically inspect the package.json to
-  //       check what scripts are available so we don't e.g. attempt build for
-  //       a package that simply has no build step
+  const packageJson = JSON.parse(await readFile("package.json"));
+
+  // TODO: Generalise this to yarn and pnpm?
   await run("npm", "install");
-  await run("npm", "run", "build");
+
+  // If there's a "build" script, run it.
+  // TODO: Probably need to loop over multiple possible script names here?
+  if ("build" in packageJson.scripts) {
+    console.log("Running `npm run build`.");
+    const buildResult = await run("npm", "run", "build");
+    console.log("stdout:", buildResult.stdout);
+    console.log("stderr:", buildResult.stderr);
+  } else {
+    console.log(
+      "No build script found. Packing repo contents without running a build.",
+    );
+  }
 
   // npm pack outputs the name of the .tgz file it creates on stdout (below a
   // whole load of logging it outputs to stderr):
   const packResult = await run("npm", "pack");
-  const finalTgz = packResult.stdout;
+  const finalTgz = packResult.stdout.trim();
 
   // Move the final tgz to host-bound output folder we set up in the Dockerfile
-  fs.rename(finalTgz, "/home/node/build/");
+  await copyFile(finalTgz, `/home/node/build/${finalTgz}`);
   console.log("Successfully wrote packed .tgz file to the build directory");
 } catch (e) {
   let errJson;
