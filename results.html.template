@@ -42,7 +42,7 @@
       resultTd.textContent = 'Mismatch';
       tr.style.backgroundColor = 'red';
     } else {
-      resultTd.textContent = pkg.errorCode;
+      resultTd.textContent = pkg.errorCategory;
       tr.style.backgroundColor = 'red';
     }
     tr.appendChild(resultTd);
