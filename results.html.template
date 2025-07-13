@@ -1,0 +1,55 @@
+<!doctype html>
+<title>source-vs-npm audit results</title>
+<style>
+  table {
+    border-collapse: collapse;
+  }
+  table, td, th {
+    border: 1px solid black;
+  }
+</style>
+<table>
+  <thead>
+    <tr>
+      <th>Package</th>
+      <th>Version</th>
+      <th>Audit time</th>
+      <th>Result</th>
+      <th><!-- View log button --></th>
+    </tr>
+  </thead>
+  <tbody id="resultsTableBody"></tbody>
+</table>
+<script>
+  const results = PLACEHOLDER;
+  const tbody = document.createElement('tbody');
+  for (const pkg of results) {
+    const tr = document.createElement('tr');
+    const packageTd = document.createElement('td');
+    packageTd.textContent = pkg.packageName;
+    tr.appendChild(packageTd);
+    const versionTd = document.createElement('td');
+    versionTd.textContent = pkg.version;
+    tr.appendChild(versionTd);
+    const startTimeTd = document.createElement('td');
+    startTimeTd.textContent = pkg.startTime;
+    tr.appendChild(startTimeTd);
+    const resultTd = document.createElement('td');
+    if (pkg.contentMatches === true) {
+      resultTd.textContent = "✓";
+      tr.style.backgroundColor = 'green';
+    } else if (pkg.contentMatches === false) {
+      resultTd.textContent = 'Mismatch';
+      tr.style.backgroundColor = 'red';
+    } else {
+      resultTd.textContent = pkg.errorCode;
+      tr.style.backgroundColor = 'red';
+    }
+    tr.appendChild(resultTd);
+    const logsTd = document.createElement('td');
+    // TODO: Populate it
+    tr.appendChild(logsTd);
+    tbody.appendChild(tr);
+  }
+  resultsTableBody.innerHTML = tbody.innerHTML;
+</script>

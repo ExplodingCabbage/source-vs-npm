@@ -1,18 +1,22 @@
 import { promisify } from "node:util";
 import { exec, execFile } from "node:child_process";
 import { mkdir, readFile, writeFile, rm, readdir } from "node:fs/promises";
-import { createWriteStream, existsSync } from "node:fs";
+import {
+  createWriteStream,
+  existsSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import downloadCounts from "download-counts" with { type: "json" };
 
 // TODO: 5000
-const N_PACKAGES = 50;
+const N_PACKAGES = 1000;
 
 const packageNames = Object.entries(downloadCounts)
   .filter(([_, count]) => count)
   .sort(([_, countA], [__, countB]) => countB - countA)
   .slice(0, N_PACKAGES)
-  .map(([name, _]) => name)
-  .reverse(); // We'll use this as a queue & pop() from it, most important first
+  .map(([name, _]) => name);
 
 // Assert there are no naughty package names we can't use as directory paths:
 for (const packageName of packageNames) {
@@ -109,6 +113,8 @@ async function auditPackage(packageName) {
     }
 
     const version = registryRespJson.version;
+    resultJson.version = version;
+
     const tarballUrl = registryRespJson.dist.tarball;
     if (!tarballUrl.endsWith(".tgz")) {
       throw "Unexpected tarball URL format. Value was: " + tarballUrl;
@@ -260,9 +266,10 @@ async function auditPackage(packageName) {
 }
 
 const MAX_SIMULTANEOUS_AUDITS = 5;
+const packageNamesQueue = [...packageNames].reverse();
 async function doAuditsUntilFinished() {
-  while (packageNames.length > 0) {
-    await auditPackage(packageNames.pop());
+  while (packageNamesQueue.length > 0) {
+    await auditPackage(packageNamesQueue.pop());
   }
 }
 
@@ -272,3 +279,20 @@ for (let i = 0; i < MAX_SIMULTANEOUS_AUDITS; i++) {
 }
 
 await Promise.all(workers);
+
+// Combine all results into a single result file:
+const allResults = packageNames.map((packageName) =>
+  JSON.parse(readFileSync(`audits/${packageName}/results.json`).toString()),
+);
+writeFileSync("allResults.json", JSON.stringify(allResults));
+
+// Populate the results template and view results
+const resultsHtml = readFileSync("./results.html.template").toString().replace(
+  "PLACEHOLDER",
+  // Escaping forward slashes, not done by JSON.stringify by default, avoids
+  // breaking out of our <script> element if allResults contains the text
+  // "</script>" in a string for some reason.
+  JSON.stringify(allResults).replaceAll("/", "\\/"),
+);
+writeFileSync("./results.html", resultsHtml);
+execFile("open", ["results.html"]);
