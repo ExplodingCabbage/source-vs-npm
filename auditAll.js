@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { promisify } from "node:util";
 import { exec, execFile } from "node:child_process";
 import { mkdir, readFile, writeFile, rm, readdir } from "node:fs/promises";
