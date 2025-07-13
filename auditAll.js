@@ -189,6 +189,7 @@ async function auditPackage(packageName) {
         "sudo",
         "docker",
         "run",
+        "--rm",
         "--mount",
         `type=bind,src=${buildDir},dst=/home/node/build`,
         imageId,
