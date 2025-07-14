@@ -4,7 +4,9 @@
   table {
     border-collapse: collapse;
   }
-  table, td, th {
+  table,
+  td,
+  th {
     border: 1px solid black;
   }
 </style>
@@ -36,42 +38,44 @@
       stats[pkg.errorCategory] = (stats[pkg.errorCategory] || 0) + 1;
     }
   }
-  for (const [result, count] of Object.entries(stats).sort((stat1, stat2) => stat2[1] - stat1[1])) {
-    const ul = document.createElement('ul');
+  for (const [result, count] of Object.entries(stats).sort(
+    (stat1, stat2) => stat2[1] - stat1[1],
+  )) {
+    const ul = document.createElement("ul");
     ul.textContent = `${result}: ${count}`;
     statsList.appendChild(ul);
   }
 
   // Populate table:
-  const tbody = document.createElement('tbody');
+  const tbody = document.createElement("tbody");
   for (const pkg of results) {
-    const tr = document.createElement('tr');
-    const packageTd = document.createElement('td');
+    const tr = document.createElement("tr");
+    const packageTd = document.createElement("td");
     packageTd.textContent = pkg.packageName;
     tr.appendChild(packageTd);
-    const versionTd = document.createElement('td');
+    const versionTd = document.createElement("td");
     versionTd.textContent = pkg.version;
     tr.appendChild(versionTd);
-    const startTimeTd = document.createElement('td');
+    const startTimeTd = document.createElement("td");
     startTimeTd.textContent = pkg.startTime;
     tr.appendChild(startTimeTd);
-    const resultTd = document.createElement('td');
+    const resultTd = document.createElement("td");
     if (pkg.contentMatches === true) {
       resultTd.textContent = "✓";
-      tr.style.backgroundColor = 'green';
+      tr.style.backgroundColor = "green";
     } else if (pkg.contentMatches === false) {
-      resultTd.textContent = 'Mismatch';
-      tr.style.backgroundColor = 'red';
+      resultTd.textContent = "Mismatch";
+      tr.style.backgroundColor = "red";
     } else {
       resultTd.textContent = pkg.errorCategory;
-      tr.style.backgroundColor = 'red';
+      tr.style.backgroundColor = "red";
     }
     tr.appendChild(resultTd);
-    const logsTd = document.createElement('td');
-    const logsLink = document.createElement('a');
-    logsLink.textContent = 'View log';
-    logsLink.href = `./audits/${pkg.packageName}/${pkg.startTime}.log`
-    logsLink.target = '_blank';
+    const logsTd = document.createElement("td");
+    const logsLink = document.createElement("a");
+    logsLink.textContent = "View log";
+    logsLink.href = `./audits/${pkg.packageName}/${pkg.startTime}.log`;
+    logsLink.target = "_blank";
     logsTd.appendChild(logsLink);
     tr.appendChild(logsTd);
     tbody.appendChild(tr);

@@ -290,7 +290,7 @@ const allResults = packageNames.map((packageName) =>
 writeFileSync("allResults.json", JSON.stringify(allResults));
 
 // Populate the results template and view results
-const resultsHtml = readFileSync("./results.html.template").toString().replace(
+const resultsHtml = readFileSync("./results.template.html").toString().replace(
   "PLACEHOLDER",
   // Escaping forward slashes, not done by JSON.stringify by default, avoids
   // breaking out of our <script> element if allResults contains the text
