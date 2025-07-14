@@ -12,7 +12,7 @@ import {
 import downloadCounts from "download-counts" with { type: "json" };
 
 // TODO: 5000
-const N_PACKAGES = 1000;
+const N_PACKAGES = 100;
 
 // Should we rerun audits on packages that have previously passed?
 const RERUN_PASSING = false;
@@ -285,7 +285,11 @@ const MAX_SIMULTANEOUS_AUDITS = 5;
 const packageNamesQueue = [...packageNames].reverse();
 async function doAuditsUntilFinished() {
   while (packageNamesQueue.length > 0) {
-    await auditPackage(packageNamesQueue.pop());
+    const packageName = packageNamesQueue.pop();
+    console.log(
+      `Auditing ${packageName}. ${packageNamesQueue.length} left after this.`,
+    );
+    await auditPackage(packageName);
   }
 }
 

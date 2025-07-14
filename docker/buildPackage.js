@@ -68,8 +68,13 @@ try {
   await run("npm", "install");
 
   // If there's a "build" script, run it.
+  if (!packageJson.scripts) {
+    console.log(
+      "Package has no scripts whatsoever. Packing without running a build.",
+    );
+  }
   // TODO: Probably need to loop over multiple possible script names here?
-  if ("build" in packageJson.scripts) {
+  else if ("build" in packageJson.scripts) {
     console.log("Running `npm run build`.");
     const buildResult = await run("npm", "run", "build");
     console.log("stdout:", buildResult.stdout);
