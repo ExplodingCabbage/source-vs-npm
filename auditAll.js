@@ -173,6 +173,13 @@ async function auditPackage(packageName) {
     // jsdiff). So we need to correct those to a usable protocol:
     repoUrl = repoUrl.replace(/^git:\/\//, "https://");
 
+    // GitHub repos can also be referenced either with SSH URLs or HTTPS URLs.
+    // To avoid needing any SSH creds, we convert the former into the latter:
+    repoUrl = repoUrl.replace(
+      /^ssh:\/\/git@github.com\//,
+      "https://github.com/",
+    );
+
     // Create (if not exists) a folder to audit this version in:
     const versionDir = `${packageDir}/${version}`;
     await mkdir(versionDir, { recursive: true });
