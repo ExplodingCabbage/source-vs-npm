@@ -47,7 +47,11 @@
     }
     tr.appendChild(resultTd);
     const logsTd = document.createElement('td');
-    // TODO: Populate it
+    const logsLink = document.createElement('a');
+    logsLink.textContent = 'View log';
+    logsLink.href = `./audits/${pkg.packageName}/${pkg.startTime}.log`
+    logsLink.target = '_blank';
+    logsTd.appendChild(logsLink);
     tr.appendChild(logsTd);
     tbody.appendChild(tr);
   }
