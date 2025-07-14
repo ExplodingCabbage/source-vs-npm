@@ -81,9 +81,10 @@ try {
   }
 
   // npm pack outputs the name of the .tgz file it creates on stdout (below a
-  // whole load of logging it outputs to stderr):
+  // whole load of other output, mostly sent to stderr - though when there are
+  // scripts that run before packing, some may go to stdout too):
   const packResult = await run("npm", "pack");
-  const finalTgz = packResult.stdout.trim();
+  const finalTgz = packResult.stdout.trim().split("\n").pop();
 
   // Move the final tgz to host-bound output folder we set up in the Dockerfile
   await copyFile(finalTgz, `/home/node/build/${finalTgz}`);

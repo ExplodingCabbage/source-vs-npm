@@ -14,6 +14,9 @@ import downloadCounts from "download-counts" with { type: "json" };
 // TODO: 5000
 const N_PACKAGES = 1000;
 
+// Should we rerun audits on packages that have previously passed?
+const RERUN_PASSING = false;
+
 const packageNames = Object.entries(downloadCounts)
   .filter(([_, count]) => count)
   .sort(([_, countA], [__, countB]) => countB - countA)
@@ -79,6 +82,16 @@ async function auditPackage(packageName) {
   // Create (if not exists) a folder for results/logs/diffs about this package:
   const packageDir = `${import.meta.dirname}/audits/${packageName}`;
   await mkdir(packageDir, { recursive: true });
+
+  // Skip?
+  if (!RERUN_PASSING) {
+    const oldResultJson = JSON.parse(
+      (await readFile(`${packageDir}/results.json`)).toString(),
+    );
+    if (oldResultJson.contentMatches) {
+      return;
+    }
+  }
 
   // A summary of this run we will write to `packageDir`:
   const resultJson = {
