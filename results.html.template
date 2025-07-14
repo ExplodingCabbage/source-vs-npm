@@ -8,6 +8,8 @@
     border: 1px solid black;
   }
 </style>
+<h4>Stats:</h4>
+<ul id="statsList"></ul>
 <table>
   <thead>
     <tr>
@@ -22,6 +24,25 @@
 </table>
 <script>
   const results = PLACEHOLDER;
+
+  // Populate stats:
+  const stats = {};
+  for (const pkg of results) {
+    if (pkg.contentMatches) {
+      stats["Pass"] = (stats["Pass"] || 0) + 1;
+    } else if (pkg.contentMatches === false) {
+      stats["Mismatch"] = (stats["Mismatch"] || 0) + 1;
+    } else {
+      stats[pkg.errorCategory] = (stats[pkg.errorCategory] || 0) + 1;
+    }
+  }
+  for (const [result, count] of Object.entries(stats).sort((stat1, stat2) => stat2[1] - stat1[1])) {
+    const ul = document.createElement('ul');
+    ul.textContent = `${result}: ${count}`;
+    statsList.appendChild(ul);
+  }
+
+  // Populate table:
   const tbody = document.createElement('tbody');
   for (const pkg of results) {
     const tr = document.createElement('tr');
