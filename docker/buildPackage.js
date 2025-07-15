@@ -6,9 +6,9 @@ import { readFile, copyFile } from "node:fs/promises";
 
 const scriptArgs = process.argv.slice(2);
 
-if (scriptArgs.length != 2) {
+if (scriptArgs.length != 3) {
   console.error(
-    "Expected 2 arguments - Git repo path and version number. Got ",
+    "Expected 3 arguments - name, Git repo path and version number. Got ",
     scriptArgs.length,
     "arguments: ",
     scriptArgs,
@@ -16,7 +16,7 @@ if (scriptArgs.length != 2) {
   process.exit(1);
 }
 
-const [gitUrl, version] = scriptArgs;
+const [packageName, gitUrl, version] = scriptArgs;
 
 console.log("Attempting to fetch and build version", version, "of", gitUrl);
 
@@ -41,48 +41,56 @@ try {
   await git("clone", gitUrl, "gitrepo");
   process.chdir("gitrepo");
 
-  // A version number on npm of `1.2.3` might correspond to a tag on GitHub of
-  // `v1.2.3`, so we try both
-  let tagExisted = false;
-  for (const tagName of [version, `v${version}`]) {
-    try {
-      await git("checkout", `refs/tags/${tagName}`);
-      tagExisted = tagName;
-      break;
-    } catch (e) {
-      console.log(`Attempted to checkout ${tagName}; got this output:`);
-      console.log("stdout:", e.stdout);
-      console.log("stderr:", e.stderr);
-      continue;
-    }
-  }
-  if (!tagExisted) {
-    console.error("Couldn't find a Git tag matching the npm version");
-    throw new BuildFailed("no tag match");
-  }
-  console.log("Checked out", tagExisted);
-
-  const packageJson = JSON.parse(await readFile("package.json"));
-
-  // TODO: Generalise this to yarn and pnpm?
-  await run("npm", "install");
-
-  // If there's a "build" script, run it.
-  if (!packageJson.scripts) {
-    console.log(
-      "Package has no scripts whatsoever. Packing without running a build.",
-    );
-  }
-  // TODO: Probably need to loop over multiple possible script names here?
-  else if ("build" in packageJson.scripts) {
-    console.log("Running `npm run build`.");
-    const buildResult = await run("npm", "run", "build");
-    console.log("stdout:", buildResult.stdout);
-    console.log("stderr:", buildResult.stderr);
+  if (packageName.startsWith("@types/")) {
+    // @types packages all come from the DefinitelyTyped repo which contains
+    // a bajillion small packages within it.
+    // We just change to the directory for this package (which will have its
+    // own package.json), skip all the other build steps, and pack.
+    process.chdir(packageName.slice(1));
   } else {
-    console.log(
-      "No build script found. Packing repo contents without running a build.",
-    );
+    // A version number on npm of `1.2.3` might correspond to a tag on GitHub of
+    // `v1.2.3`, so we try both
+    let tagExisted = false;
+    for (const tagName of [version, `v${version}`]) {
+      try {
+        await git("checkout", `refs/tags/${tagName}`);
+        tagExisted = tagName;
+        break;
+      } catch (e) {
+        console.log(`Attempted to checkout ${tagName}; got this output:`);
+        console.log("stdout:", e.stdout);
+        console.log("stderr:", e.stderr);
+        continue;
+      }
+    }
+    if (!tagExisted) {
+      console.error("Couldn't find a Git tag matching the npm version");
+      throw new BuildFailed("no tag match");
+    }
+    console.log("Checked out", tagExisted);
+
+    const packageJson = JSON.parse(await readFile("package.json"));
+
+    // TODO: Generalise this to yarn and pnpm?
+    await run("npm", "install");
+
+    // If there's a "build" script, run it.
+    if (!packageJson.scripts) {
+      console.log(
+        "Package has no scripts whatsoever. Packing without running a build.",
+      );
+    }
+    // TODO: Probably need to loop over multiple possible script names here?
+    else if ("build" in packageJson.scripts) {
+      console.log("Running `npm run build`.");
+      const buildResult = await run("npm", "run", "build");
+      console.log("stdout:", buildResult.stdout);
+      console.log("stderr:", buildResult.stderr);
+    } else {
+      console.log(
+        "No build script found. Packing repo contents without running a build.",
+      );
+    }
   }
 
   // npm pack outputs the name of the .tgz file it creates on stdout (below a

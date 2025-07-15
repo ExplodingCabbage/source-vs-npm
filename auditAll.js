@@ -223,6 +223,7 @@ async function auditPackage(packageName) {
         "--mount",
         `type=bind,src=${buildDir},dst=/home/node/build`,
         imageId,
+        packageName,
         repoUrl,
         version,
       )
@@ -253,8 +254,16 @@ async function auditPackage(packageName) {
     }
 
     await run("tar", "-C", buildDir, "-xzf", `${buildDir}/${tgzFilename}`);
-    // TODO: Tar does this itself no?
-    //await rm(`${buildDir}/${tgzFilename}`);
+    await rm(`${buildDir}/${tgzFilename}`);
+    // As described at
+    // https://docs.npmjs.com/cli/v9/commands/npm-install#description
+    // (points a and b), a package tarball contains a folder that contains the
+    // package contents. That folder is usually named "package" (that seems to
+    // be what `npm pack` defaults to), but this is not strictly required and
+    // there are exceptions - e.g.
+    // https://registry.npmjs.org/@types/node/-/node-24.0.14.tgz
+    // Therefore we need to check the name of the folder we've extracted here:
+    const [buildTarballFolderName] = await readdir(buildDir);
 
     // If we successfully ran a build, next we need to download the version
     // published on npm to compare against
@@ -267,11 +276,17 @@ async function auditPackage(packageName) {
       "-xzf",
       `${publishedDir}/${tarballFilename}`,
     );
+    const [publishedTarballFolderName] = await readdir(publishedDir);
 
     // npm tarballs always have a top-level "package/" directory, so the final
     // step is to diff those against each other:
     try {
-      await run("diff", "-u", `${buildDir}/package`, `${publishedDir}/package`);
+      await run(
+        "diff",
+        "-u",
+        `${buildDir}/${buildTarballFolderName}`,
+        `${publishedDir}/${publishedTarballFolderName}`,
+      );
       resultJson.contentMatches = true;
     } catch (e) {
       resultJson.contentMatches = false;
