@@ -260,12 +260,15 @@ async function auditPackage(packageName) {
 
     // npm tarballs always have a top-level "package/" directory, so the final
     // step is to diff those against each other:
-    // TODO: store the diff for later comparison; don't crash here
-    await run("diff", `${buildDir}/package`, `${publishedDir}/package`);
-
-    // If we've made it here, then the published files were identical to what
-    // we got building from source - hooray!
-    resultJson.contentMatches = true;
+    try {
+      await run("diff", "-u", `${buildDir}/package`, `${publishedDir}/package`);
+      resultJson.contentMatches = true;
+    } catch (e) {
+      resultJson.contentMatches = false;
+      const diff = e.stdout;
+      log("Mismatch! Diff:");
+      log(diff);
+    }
   } catch (e) {
     let category, msg;
     if (e instanceof JobFailed) {
