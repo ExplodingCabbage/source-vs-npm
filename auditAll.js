@@ -289,11 +289,11 @@ async function auditPackage(packageName) {
       );
       resultJson.contentMatches = true;
     } catch (e) {
-      resultJson.contentMatches = false;
       const diff = e.stdout;
       if (!diff.trim()) {
         throw "diff failed, but with no output";
       }
+      resultJson.contentMatches = false;
       // TODO: Handle CHANGELOG.md; rules on automatically including it changed
       //       with consequent benign diffs here
       log("Mismatch! Diff:");
