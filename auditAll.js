@@ -10,6 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import downloadCounts from "download-counts" with { type: "json" };
+import knownMismatches from "./knownMismatches.js";
 
 // TODO: 5000
 const N_PACKAGES = 100;
@@ -129,6 +130,15 @@ async function auditPackage(packageName) {
 
     const version = registryRespJson.version;
     resultJson.version = version;
+
+    if (
+      packageName in knownMismatches &&
+      knownMismatches[packageName].includes(version)
+    ) {
+      resultJson.contentMatches = false;
+      resultJson.isKnownBenignMismatch = true;
+      return;
+    }
 
     const tarballUrl = registryRespJson.dist.tarball;
     if (!tarballUrl.endsWith(".tgz")) {

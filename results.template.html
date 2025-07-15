@@ -32,6 +32,8 @@
   for (const pkg of results) {
     if (pkg.contentMatches) {
       stats["Pass"] = (stats["Pass"] || 0) + 1;
+    } else if (pkg.contentMatches === false && pkg.isKnownBenignMismatch) {
+      stats["Benign mismatch"] = (stats["Benign mismatch"] || 0) + 1;
     } else if (pkg.contentMatches === false) {
       stats["Mismatch"] = (stats["Mismatch"] || 0) + 1;
     } else {
@@ -62,6 +64,9 @@
     const resultTd = document.createElement("td");
     if (pkg.contentMatches === true) {
       resultTd.textContent = "✓";
+      tr.style.backgroundColor = "green";
+    } else if (pkg.contentMatches === false && pkg.isKnownBenignMismatch) {
+      resultTd.textContent = "Benign mismatch";
       tr.style.backgroundColor = "green";
     } else if (pkg.contentMatches === false) {
       resultTd.textContent = "Mismatch";
