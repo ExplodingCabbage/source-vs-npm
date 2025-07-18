@@ -89,8 +89,15 @@ try {
     // Some multi-package monorepos like https://github.com/eslint/js have
     // individual packages in folders within a /packages/ top-level folder.
     // Let's try to handle that:
-    if (!isReact && existsSync(`packages/${packageName}`)) {
-      process.chdir(`packages/${packageName}`);
+    if (!isReact) {
+      for (const possibleSubfolderName of [
+        packageName,
+        `packages/${packageName}`,
+      ]) {
+        if (existsSync(`${possibleSubfolderName}/package.json`)) {
+          process.chdir(possibleSubfolderName);
+        }
+      }
     }
 
     const packageJson = JSON.parse(await readFile("package.json"));
