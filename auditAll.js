@@ -310,9 +310,9 @@ async function auditPackage(packageName) {
       // 1. Sometimes the published version includes CHANGELOG.md but our
       //    generated version doesn't, because npm's rules on packing
       //    CHANGELOG.md by default have changed.
-      diff.replace(
+      diff = diff.replace(
         new RegExp(
-          `^Only in ${escapeRegExp(publishedDir + "/" + publishedTarballFolderName)}: CHANGELOG.md$\n`,
+          `^Only in ${escapeRegExp(publishedDir + "/" + publishedTarballFolderName)}: CHANGELOG\\.md$\\n`,
           "m",
         ),
         "",
