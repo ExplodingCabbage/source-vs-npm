@@ -60,7 +60,12 @@ try {
     // A version number on npm of `1.2.3` might correspond to a tag on GitHub of
     // `v1.2.3`, so we try both
     let tagExisted = false;
-    for (const tagName of [version, `v${version}`]) {
+    for (const tagName of [
+      version,
+      `v${version}`,
+      `${packageName}-${version}`,
+      `${packageName}-v${version}`, // Used by yargs-parser
+    ]) {
       try {
         await git("checkout", `refs/tags/${tagName}`);
         tagExisted = tagName;
