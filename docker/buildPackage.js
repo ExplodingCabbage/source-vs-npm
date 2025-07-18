@@ -1,7 +1,7 @@
 import process from "node:process";
 import { promisify } from "node:util";
 import { execFile } from "node:child_process";
-import fs from "node:fs";
+import fs, { existsSync } from "node:fs";
 import { readFile, copyFile } from "node:fs/promises";
 
 const scriptArgs = process.argv.slice(2);
@@ -47,6 +47,8 @@ class BuildFailed extends Error {
 try {
   await git("clone", gitUrl, "gitrepo");
   process.chdir("gitrepo");
+  const useYarn = existsSync("yarn.lock");
+  const pkgMngr = useYarn ? "yarn" : "npm";
 
   if (packageName.startsWith("@types/")) {
     // @types packages all come from the DefinitelyTyped repo which contains
@@ -78,19 +80,20 @@ try {
 
     const packageJson = JSON.parse(await readFile("package.json"));
 
-    // TODO: Generalise this to yarn and pnpm?
-    await run("npm", "install");
+    await run(pkgMngr, "install");
 
-    // If there's a "build" script, run it.
-    if (!packageJson.scripts) {
+    // If there's a "build" script, run it. For some packages we need
+    // repo-specific special cases here
+    if (gitUrl === "https://github.com/facebook/react.git") {
+      await run("yarn", "build", packageName);
+      process.chdir(`build/oss-stable-semver/${packageName}`);
+    } else if (!packageJson.scripts) {
       console.log(
         "Package has no scripts whatsoever. Packing without running a build.",
       );
-    }
-    // TODO: Probably need to loop over multiple possible script names here?
-    else if ("build" in packageJson.scripts) {
-      console.log("Running `npm run build`.");
-      const buildResult = await run("npm", "run", "build");
+    } else if ("build" in packageJson.scripts) {
+      console.log("Running `build`.");
+      const buildResult = await run(pkgMngr, "run", "build");
       console.log("stdout:", buildResult.stdout);
       console.log("stderr:", buildResult.stderr);
     } else {
@@ -100,11 +103,32 @@ try {
     }
   }
 
-  // npm pack outputs the name of the .tgz file it creates on stdout (below a
-  // whole load of other output, mostly sent to stderr - though when there are
-  // scripts that run before packing, some may go to stdout too):
-  const packResult = await run("npm", "pack");
-  const finalTgz = packResult.stdout.trim().split("\n").pop();
+  const packResult = await run(pkgMngr, "pack");
+  let finalTgz;
+  if (useYarn) {
+    // We're looking to find and parse a line like this:
+    //     success Wrote tarball to "/home/mark/react/packages/react-is/react-is-v19.1.0.tgz".
+    // (In a real terminal it's colored, but yarn omits the colors when not
+    // called from a terminal, so we don't need to deal with that nuisance.)
+    // (Hopefully there will never be multiple lines like that, or we'll get
+    // this wrong!)
+    const match = packResult.stdout.match(
+      /^success Wrote tarball to "(.+)"\.$/m,
+    );
+    if (!match) {
+      console.log(
+        "yarn didn't output tarball name? Output:",
+        packResult.stdout,
+      );
+      throw "couldn't determine tarball name";
+    }
+    finalTgz = match[1].split("/").pop();
+  } else {
+    // npm pack outputs the name of the .tgz file it creates on stdout (below a
+    // whole load of other output, mostly sent to stderr - though when there are
+    // scripts that run before packing, some may go to stdout too):
+    finalTgz = packResult.stdout.trim().split("\n").pop();
+  }
 
   // Move the final tgz to host-bound output folder we set up in the Dockerfile
   await copyFile(finalTgz, `/home/node/build/${finalTgz}`);

@@ -376,7 +376,17 @@ async function auditPackage(packageName) {
     } else {
       category = "unexpected crash";
       if (e instanceof Error) {
-        msg = e.stack;
+        if (e.stdout || e.stderr) {
+          msg = `Command failed with an error. Stack: ${e.stack}\n`;
+          if (e.stdout) {
+            msg += `stdout: ${e.stdout}\n`;
+          }
+          if (e.stderr) {
+            msg += `stderr: ${e.stderr}\n`;
+          }
+        } else {
+          msg = e.stack;
+        }
       } else {
         msg = e;
       }
