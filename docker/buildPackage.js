@@ -18,7 +18,14 @@ if (scriptArgs.length != 3) {
 
 const [packageName, gitUrl, version] = scriptArgs;
 
-console.log("Attempting to fetch and build version", version, "of", gitUrl);
+console.log(
+  "Attempting to fetch and build version",
+  version,
+  "of",
+  packageName,
+  "from",
+  gitUrl,
+);
 
 async function run(...command) {
   return await promisify(execFile)(command[0], command.slice(1));
