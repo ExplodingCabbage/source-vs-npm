@@ -313,6 +313,7 @@ async function auditPackage(packageName) {
       diff.replace(
         new RegExp(
           `^Only in ${escapeRegExp(publishedDir + "/" + publishedTarballFolderName)}: CHANGELOG.md$\n`,
+          "m",
         ),
         "",
       );
