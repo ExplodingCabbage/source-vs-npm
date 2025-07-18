@@ -13,6 +13,7 @@ import downloadCounts from "download-counts" with { type: "json" };
 import knownMismatches from "./knownMismatches.js";
 import { parsePatch } from "diff";
 import escapeRegExp from "lodash.escaperegexp";
+import { topPackages } from "./topPackages.js";
 
 // TODO: 5000
 const N_PACKAGES = 100;
@@ -20,11 +21,7 @@ const N_PACKAGES = 100;
 // Should we rerun audits on packages that have previously passed?
 const RERUN_PASSING = false;
 
-const packageNames = Object.entries(downloadCounts)
-  .filter(([_, count]) => count)
-  .sort(([_, countA], [__, countB]) => countB - countA)
-  .slice(0, N_PACKAGES)
-  .map(([name, _]) => name);
+const packageNames = topPackages(N_PACKAGES);
 
 // Assert there are no naughty package names we can't use as directory paths:
 for (const packageName of packageNames) {
