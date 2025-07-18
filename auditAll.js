@@ -9,7 +9,6 @@ import {
   readFileSync,
   writeFileSync,
 } from "node:fs";
-import downloadCounts from "download-counts" with { type: "json" };
 import knownMismatches from "./knownMismatches.js";
 import { parsePatch } from "diff";
 import escapeRegExp from "lodash.escaperegexp";
