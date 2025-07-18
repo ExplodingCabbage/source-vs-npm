@@ -86,9 +86,14 @@ try {
     // (The React monorepo is a special snowflake & needs some of custom logic)
     const isReact = gitUrl === "https://github.com/facebook/react.git";
 
+    await run(pkgMngr, "install");
+
     // Some multi-package monorepos like https://github.com/eslint/js have
     // individual packages in folders within a /packages/ top-level folder.
-    // Let's try to handle that:
+    // Let's try to handle that by moving into the the subfolder.
+    // (We run an `npm install` at the top level of the repo AND in the
+    // subfolder, in case the subfolder build needs tools from the top-level
+    // package.json file.)
     if (!isReact) {
       for (const possibleSubfolderName of [
         packageName,
@@ -96,13 +101,13 @@ try {
       ]) {
         if (existsSync(`${possibleSubfolderName}/package.json`)) {
           process.chdir(possibleSubfolderName);
+          await run(pkgMngr, "install");
+          break;
         }
       }
     }
 
     const packageJson = JSON.parse(await readFile("package.json"));
-
-    await run(pkgMngr, "install");
 
     // If there's a "build" script, run it. For some packages we need
     // repo-specific special cases here
