@@ -10,4 +10,8 @@ export default {
   // https://github.com/inspect-js/is-core-module/commit/aafb7cae0976ecfb156bc563dde57ca8fd838d0c
   // without that change being committed to source control. Innocuous.
   resolve: ["1.22.10"],
+
+  // Maintainer accidentally published his /.idea folder (IDE config outside
+  // source control).
+  "iconv-lite": ["0.6.3"],
 };
