@@ -135,13 +135,16 @@ try {
   if (useYarn) {
     // We're looking to find and parse a line like this:
     //     success Wrote tarball to "/home/mark/react/packages/react-is/react-is-v19.1.0.tgz".
+    // or
+    //     Package archive generated in /home/node/gitrepo/packages/pretty-format/package.tgz
+    // (which format depends on Yarn version).
     // (In a real terminal it's colored, but yarn omits the colors when not
     // called from a terminal, so we don't need to deal with that nuisance.)
     // (Hopefully there will never be multiple lines like that, or we'll get
     // this wrong!)
-    const match = packResult.stdout.match(
-      /^success Wrote tarball to "(.+)"\.$/m,
-    );
+    const match =
+      packResult.stdout.match(/^success Wrote tarball to "(.+)"\.$/m) ||
+      packResult.stdout.match(/Package archive generated in (.+)$/m);
     if (!match) {
       console.log(
         "yarn didn't output tarball name? Output:",
