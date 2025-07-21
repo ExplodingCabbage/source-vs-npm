@@ -27,12 +27,29 @@ console.log(
   gitUrl,
 );
 
-async function run(...command) {
-  return await promisify(execFile)(command[0], command.slice(1));
+async function run(command, options) {
+  console.log("Running", command, "with options:", options);
+  try {
+    const result = await promisify(execFile)(
+      command[0],
+      command.slice(1),
+      options,
+    );
+    console.log("stdout:", result.stdout);
+    console.log("stderr:", result.stderr);
+    console.log("---");
+    return result;
+  } catch (e) {
+    console.log("Command failed!");
+    console.log("stdout:", e.stdout);
+    console.log("stderr:", e.stderr);
+    console.log("---");
+    throw e;
+  }
 }
 
 async function git(...command) {
-  return await run("git", ...command);
+  return await run(["git", ...command]);
 }
 
 class BuildFailed extends Error {
@@ -47,8 +64,24 @@ class BuildFailed extends Error {
 try {
   await git("clone", gitUrl, "gitrepo");
   process.chdir("gitrepo");
+  const repoRoot = process.cwd();
   const useYarn = existsSync("yarn.lock");
   const pkgMngr = useYarn ? "yarn" : "npm";
+
+  // Some multi-package monorepos like https://github.com/eslint/js have
+  // individual packages in folders within a /packages/ top-level folder.
+  // We try to detect that here and adjust the build and pack process
+  // accordingly later.
+  let packageSubdir = null; // null means this is NOT a multipackage monorepo
+  for (const possibleSubfolderName of [
+    `${repoRoot}/${packageName}`,
+    `${repoRoot}/packages/${packageName}`,
+  ]) {
+    if (existsSync(`${possibleSubfolderName}/package.json`)) {
+      packageSubdir = possibleSubfolderName;
+      break;
+    }
+  }
 
   if (packageName.startsWith("@types/")) {
     // @types packages all come from the DefinitelyTyped repo which contains
@@ -74,7 +107,6 @@ try {
         console.log(`Attempted to checkout ${tagName}; got this output:`);
         console.log("stdout:", e.stdout);
         console.log("stderr:", e.stderr);
-        continue;
       }
     }
     if (!tagExisted) {
@@ -83,54 +115,52 @@ try {
     }
     console.log("Checked out", tagExisted);
 
-    // (The React monorepo is a special snowflake & needs some of custom logic)
-    const isReact = gitUrl === "https://github.com/facebook/react.git";
-
-    await run(pkgMngr, "install");
-
-    // Some multi-package monorepos like https://github.com/eslint/js have
-    // individual packages in folders within a /packages/ top-level folder.
-    // Let's try to handle that by moving into the the subfolder.
-    // (We run an `npm install` at the top level of the repo AND in the
-    // subfolder, in case the subfolder build needs tools from the top-level
-    // package.json file.)
-    if (!isReact) {
-      for (const possibleSubfolderName of [
-        packageName,
-        `packages/${packageName}`,
-      ]) {
-        if (existsSync(`${possibleSubfolderName}/package.json`)) {
-          process.chdir(possibleSubfolderName);
-          await run(pkgMngr, "install");
-          break;
-        }
-      }
+    await run([pkgMngr, "install"]);
+    if (packageSubdir) {
+      await run([pkgMngr, "install"], { cwd: packageSubdir });
     }
 
-    const packageJson = JSON.parse(await readFile("package.json"));
+    const rootPackageJson = JSON.parse(await readFile("package.json"));
+    let subdirPackageJson;
+    if (packageSubdir) {
+      subdirPackageJson = JSON.parse(
+        await readFile(`${packageSubdir}/package.json`),
+      );
+    }
 
-    // If there's a "build" script, run it. For some packages we need
-    // repo-specific special cases here
-    if (isReact) {
-      await run("yarn", "build", packageName);
-      process.chdir(`build/oss-stable-semver/${packageName}`);
-    } else if (!packageJson.scripts) {
-      console.log(
-        "Package has no scripts whatsoever. Packing without running a build.",
-      );
-    } else if ("build" in packageJson.scripts) {
-      console.log("Running `build`.");
-      const buildResult = await run(pkgMngr, "run", "build");
-      console.log("stdout:", buildResult.stdout);
-      console.log("stderr:", buildResult.stderr);
-    } else {
-      console.log(
-        "No build script found. Packing repo contents without running a build.",
-      );
+    if (
+      packageSubdir &&
+      subdirPackageJson.scripts &&
+      "build" in subdirPackageJson.scripts
+    ) {
+      await run([pkgMngr, "run", "build"], { cwd: packageSubdir });
+    } else if (rootPackageJson.scripts && "build" in rootPackageJson.scripts) {
+      if (packageSubdir) {
+        // First try passing the package name as an argument to the top-level
+        // build script. Sometimes they take arguments!
+        try {
+          await run([pkgMngr, "run", "build", packageName]);
+        } catch {
+          // If that fails, just run it with no arguments. Probably this builds
+          // lots of packages and is slow, but if that's the only option, we
+          // just have to suck it up.
+          await run([pkgMngr, "run", "build"]);
+        }
+      } else {
+        await run([pkgMngr, "run", "build"]);
+      }
     }
   }
 
-  const packResult = await run(pkgMngr, "pack");
+  // Special-snowflake logic for the React monorepo - this is where it puts
+  // built packages ready to be packed!
+  if (gitUrl === "https://github.com/facebook/react.git") {
+    process.chdir(`build/oss-stable-semver/${packageName}`);
+  } else if (packageSubdir) {
+    process.chdir(packageSubdir);
+  }
+
+  const packResult = await run([pkgMngr, "pack"]);
   let finalTgz;
   if (useYarn) {
     // We're looking to find and parse a line like this:
