@@ -117,15 +117,17 @@ async function auditPackage(packageName) {
     // Hit the npm registry to fetch data we need about the package:
     let registryRespJson;
     try {
-      const resp = await fetch(
-        `https://registry.npmjs.org/${packageName}/latest`,
-      );
+      // We only care about the latest version, but cannot use the endpoint to
+      // fetch just that version because that endpoint doesn't return the
+      // publication date, which we need. So we have to fetch all the data
+      // about the package!
+      const resp = await fetch(`https://registry.npmjs.org/${packageName}`);
       registryRespJson = await resp.json();
     } catch (e) {
       throw new JobFailed("reg fetch failed", e);
     }
 
-    const version = registryRespJson.version;
+    const version = registryRespJson["dist-tags"].latest;
     resultJson.version = version;
 
     if (
@@ -137,7 +139,9 @@ async function auditPackage(packageName) {
       return;
     }
 
-    const tarballUrl = registryRespJson.dist.tarball;
+    const publishedAt = registryRespJson.time[version];
+
+    const tarballUrl = registryRespJson.versions[version].dist.tarball;
     if (!tarballUrl.endsWith(".tgz")) {
       throw "Unexpected tarball URL format. Value was: " + tarballUrl;
     }
@@ -223,6 +227,7 @@ async function auditPackage(packageName) {
         packageName,
         repoUrl,
         version,
+        publishedAt,
       )
     ).stdout;
     log(output);

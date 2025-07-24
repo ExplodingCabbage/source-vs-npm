@@ -6,9 +6,9 @@ import { readFile, copyFile } from "node:fs/promises";
 
 const scriptArgs = process.argv.slice(2);
 
-if (scriptArgs.length != 3) {
+if (scriptArgs.length != 4) {
   console.error(
-    "Expected 3 arguments - name, Git repo path and version number. Got ",
+    "Expected 4 arguments - name, Git repo path, version number, and publication date. Got ",
     scriptArgs.length,
     "arguments: ",
     scriptArgs,
@@ -16,7 +16,7 @@ if (scriptArgs.length != 3) {
   process.exit(1);
 }
 
-const [packageName, gitUrl, version] = scriptArgs;
+const [packageName, gitUrl, version, publishedDate] = scriptArgs;
 
 console.log(
   "Attempting to fetch and build version",
@@ -115,9 +115,17 @@ try {
     }
     console.log("Checked out", tagExisted);
 
-    await run([pkgMngr, "install"]);
+    // npm, but not yarn, lets you pass a "--before" argument to only install
+    // dependency versions that were published before a given date. If we're
+    // using npm, let's use that to ensure we build using dep versions that
+    // were available when the published version was built.
+    const beforeDateArgs = useYarn ? [] : ["--before", publishedDate];
+
+    await run([pkgMngr, "install", ...beforeDateArgs]);
     if (packageSubdir) {
-      await run([pkgMngr, "install"], { cwd: packageSubdir });
+      await run([pkgMngr, "install", ...beforeDateArgs], {
+        cwd: packageSubdir,
+      });
     }
 
     const rootPackageJson = JSON.parse(await readFile("package.json"));

@@ -14,4 +14,10 @@ export default {
   // Maintainer accidentally published his /.idea folder (IDE config outside
   // source control).
   "iconv-lite": ["0.6.3"],
+
+  // Gets published with Lerna, and I don't know how to repro Lerna's packing
+  // process without publishing & without creating a new commit.
+  // Published version has two innocuous differences: presence of a `LICENSE`
+  // file and inclusion of `gitHead` key in package.json.
+  "pretty-format": ["30.0.2"],
 };
