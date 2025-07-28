@@ -84,6 +84,14 @@ try {
     }
   }
 
+  const rootPackageJson = JSON.parse(await readFile("package.json"));
+  let subdirPackageJson;
+  if (packageSubdir) {
+    subdirPackageJson = JSON.parse(
+      await readFile(`${packageSubdir}/package.json`),
+    );
+  }
+
   if (packageName.startsWith("@types/")) {
     // @types packages all come from the DefinitelyTyped repo which contains
     // a bajillion small packages within it.
@@ -129,14 +137,6 @@ try {
       });
     }
 
-    const rootPackageJson = JSON.parse(await readFile("package.json"));
-    let subdirPackageJson;
-    if (packageSubdir) {
-      subdirPackageJson = JSON.parse(
-        await readFile(`${packageSubdir}/package.json`),
-      );
-    }
-
     if (
       packageSubdir &&
       subdirPackageJson.scripts &&
@@ -169,34 +169,66 @@ try {
     process.chdir(packageSubdir);
   }
 
-  const packResult = await run([pkgMngr, "pack"]);
+  // Is there a clue in any package.json file that the clean-publish package
+  // should be used for generating the published version? Clues could be:
+  // - "clean-publish" being listed as a dev dependency
+  // - there being a "clean-publish" config object at the top level of the JSON
+  const useCleanPublish =
+    rootPackageJson.devDependencies?.["clean-publish"] ||
+    subdirPackageJson?.devDependencies?.["clean-publish"] ||
+    rootPackageJson["clean-publish"] ||
+    subdirPackageJson?.["clean-publish"];
+
   let finalTgz;
-  if (useYarn) {
-    // We're looking to find and parse a line like this:
-    //     success Wrote tarball to "/home/mark/react/packages/react-is/react-is-v19.1.0.tgz".
-    // or
-    //     Package archive generated in /home/node/gitrepo/packages/pretty-format/package.tgz
-    // (which format depends on Yarn version).
-    // (In a real terminal it's colored, but yarn omits the colors when not
-    // called from a terminal, so we don't need to deal with that nuisance.)
-    // (Hopefully there will never be multiple lines like that, or we'll get
-    // this wrong!)
-    const match =
-      packResult.stdout.match(/^success Wrote tarball to "(.+)"\.$/m) ||
-      packResult.stdout.match(/Package archive generated in (.+)$/m);
-    if (!match) {
-      console.log(
-        "yarn didn't output tarball name? Output:",
-        packResult.stdout,
-      );
-      throw "couldn't determine tarball name";
-    }
-    finalTgz = match[1].split("/").pop();
+  if (useCleanPublish) {
+    // Awkward case! clean-publish does have a mode that just packs without
+    // publishing, sort of - but rather than compressing the output into a
+    // .tar.gz file, it just leaves it uncompressed in a temporary folder.
+    // To be able to get a tarball, we need to tell it what to call that folder
+    // (so we know where the output will go - otherwise it's randomly named!)
+    // and then compress the output ourselves.
+    const packFolderName = "cleanpublishoutput";
+    await run([
+      "npx",
+      "clean-publish",
+      "--without-publish",
+      "--temp-dir",
+      packFolderName,
+    ]);
+    finalTgz = `${packageName}-${version}.tgz`;
+    await run(["tar", "-czf", finalTgz, packFolderName]);
   } else {
-    // npm pack outputs the name of the .tgz file it creates on stdout (below a
-    // whole load of other output, mostly sent to stderr - though when there are
-    // scripts that run before packing, some may go to stdout too):
-    finalTgz = packResult.stdout.trim().split("\n").pop();
+    // Normal, simple case, where we just run `npm pack` or `yarn pack` or
+    // whatever.
+    const packResult = await run([pkgMngr, "pack"]);
+    if (useYarn) {
+      // We're looking to find and parse a line like this:
+      //     success Wrote tarball to "/home/mark/react/packages/react-is/react-is-v19.1.0.tgz".
+      // or
+      //     Package archive generated in /home/node/gitrepo/packages/pretty-format/package.tgz
+      // (which format depends on Yarn version).
+      // (In a real terminal it's colored, but yarn omits the colors when not
+      // called from a terminal, so we don't need to deal with that nuisance.)
+      // (Hopefully there will never be multiple lines like that, or we'll get
+      // this wrong!)
+      const match =
+        packResult.stdout.match(/^success Wrote tarball to "(.+)"\.$/m) ||
+        packResult.stdout.match(/Package archive generated in (.+)$/m);
+      if (!match) {
+        console.log(
+          "yarn didn't output tarball name? Output:",
+          packResult.stdout,
+        );
+        throw "couldn't determine tarball name";
+      }
+      finalTgz = match[1].split("/").pop();
+    } else {
+      // TODO: What about pnpm? Does this logic handle pnpm pack properly?
+      // npm pack outputs the name of the .tgz file it creates on stdout (below a
+      // whole load of other output, mostly sent to stderr - though when there are
+      // scripts that run before packing, some may go to stdout too):
+      finalTgz = packResult.stdout.trim().split("\n").pop();
+    }
   }
 
   // Move the final tgz to host-bound output folder we set up in the Dockerfile
