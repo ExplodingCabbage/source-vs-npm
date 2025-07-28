@@ -66,7 +66,8 @@ try {
   process.chdir("gitrepo");
   const repoRoot = process.cwd();
   const useYarn = existsSync("yarn.lock");
-  const pkgMngr = useYarn ? "yarn" : "npm";
+  const usePnpm = existsSync("pnpm-lock.yaml");
+  const pkgMngr = useYarn ? "yarn" : usePnpm ? "pnpm" : "npm";
 
   // Some multi-package monorepos like https://github.com/eslint/js have
   // individual packages in folders within a /packages/ top-level folder.
@@ -119,7 +120,7 @@ try {
     // dependency versions that were published before a given date. If we're
     // using npm, let's use that to ensure we build using dep versions that
     // were available when the published version was built.
-    const beforeDateArgs = useYarn ? [] : ["--before", publishedDate];
+    const beforeDateArgs = pkgMngr == "npm" ? ["--before", publishedDate] : [];
 
     await run([pkgMngr, "install", ...beforeDateArgs]);
     if (packageSubdir) {

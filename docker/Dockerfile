@@ -14,6 +14,8 @@ RUN apt-get update && apt-get install -y \
 # (Fails if run as non-root.)
 RUN npm install -g npm@latest
 
+RUN npm install -g pnpm
+
 # These base images come with a non-root `node` user. We use that user for
 # builds just in case we need to use any tools that freak out about being run
 # as root (and because it has a clean home directory e can work in).
