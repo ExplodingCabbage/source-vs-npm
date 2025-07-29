@@ -43,4 +43,12 @@ export default {
   // set to run only on publish, not on pack, so doesn't fire when we do our
   // own build.
   "eslint-scope": ["8.4.0"],
+
+  // pnpm reorders package.json keys for some reason
+  ms: ["2.1.3"],
+
+  // TODO: Another sketchy one. Looks like browserify (probably uglifyify) is
+  //       outputting functions in a different order to the published version,
+  //       but dunno why and is hard to audit at a glance.
+  qs: ["6.14.0"],
 };

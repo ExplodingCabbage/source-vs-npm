@@ -84,14 +84,6 @@ try {
     }
   }
 
-  const rootPackageJson = JSON.parse(await readFile("package.json"));
-  let subdirPackageJson;
-  if (packageSubdir) {
-    subdirPackageJson = JSON.parse(
-      await readFile(`${packageSubdir}/package.json`),
-    );
-  }
-
   if (packageName.startsWith("@types/")) {
     // @types packages all come from the DefinitelyTyped repo which contains
     // a bajillion small packages within it.
@@ -123,7 +115,17 @@ try {
       throw new BuildFailed("no tag match");
     }
     console.log("Checked out", tagExisted);
+  }
 
+  const rootPackageJson = JSON.parse(await readFile("package.json"));
+  let subdirPackageJson;
+  if (packageSubdir) {
+    subdirPackageJson = JSON.parse(
+      await readFile(`${packageSubdir}/package.json`),
+    );
+  }
+
+  if (!packageName.startsWith("@types/")) {
     // npm, but not yarn, lets you pass a "--before" argument to only install
     // dependency versions that were published before a given date. If we're
     // using npm, let's use that to ensure we build using dep versions that
