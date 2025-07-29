@@ -38,4 +38,9 @@ export default {
   // A load of docs and config gets excluded from the published package via
   // some undocumented process. Whatever.
   postcss: ["8.5.6"],
+
+  // A build step for updating a "version" variable in some code is erroneously
+  // set to run only on publish, not on pack, so doesn't fire when we do our
+  // own build.
+  "eslint-scope": ["8.4.0"],
 };
