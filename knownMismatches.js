@@ -34,4 +34,8 @@ export default {
   //       haven't fully done that.
   //       Return to this on next publish?
   ignore: ["7.0.5"],
+
+  // A load of docs and config gets excluded from the published package via
+  // some undocumented process. Whatever.
+  postcss: ["8.5.6"],
 };
