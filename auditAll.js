@@ -101,13 +101,18 @@ async function auditPackage(packageName) {
   const logStream = createWriteStream(
     `${packageDir}/${resultJson.startTime}.log`,
   );
+  function writeStringToLog(string) {
+    if (!logStream.write(string)) {
+      console.error("logStream.write returned false; TODO: handle this");
+    }
+  }
 
   // Create functions for logging and for writing final audit results:
   function log(...msg) {
     msg.reverse();
     while (msg.length) {
-      logStream.write(msg.pop().toString());
-      logStream.write(msg.length > 0 ? " " : "\n");
+      writeStringToLog(msg.pop().toString());
+      writeStringToLog(msg.length > 0 ? " " : "\n");
     }
   }
 
