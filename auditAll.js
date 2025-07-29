@@ -101,18 +101,26 @@ async function auditPackage(packageName) {
   const logStream = createWriteStream(
     `${packageDir}/${resultJson.startTime}.log`,
   );
-  function writeStringToLog(string) {
+  let drainPromiseResolver;
+  logStream.on("drain", () => {
+    if (drainPromiseResolver) drainPromiseResolver();
+  });
+
+  async function writeStringToLog(string) {
     if (!logStream.write(string)) {
-      console.error("logStream.write returned false; TODO: handle this");
+      const drainPromise = new Promise((resolve, _) => {
+        drainPromiseResolver = resolve;
+      });
+      await drainPromise;
     }
   }
 
   // Create functions for logging and for writing final audit results:
-  function log(...msg) {
+  async function log(...msg) {
     msg.reverse();
     while (msg.length) {
-      writeStringToLog(msg.pop().toString());
-      writeStringToLog(msg.length > 0 ? " " : "\n");
+      await writeStringToLog(msg.pop().toString());
+      await writeStringToLog(msg.length > 0 ? " " : "\n");
     }
   }
 
@@ -219,7 +227,7 @@ async function auditPackage(packageName) {
     // created from the image we built earlier.
     // We "bind mount" an empty folder on the host to the container for the
     // container to write results to:
-    log("Running build inside Docker. Output:");
+    await log("Running build inside Docker. Output:");
     const output = (
       await runShell(
         "sudo",
@@ -235,7 +243,7 @@ async function auditPackage(packageName) {
         publishedAt,
       )
     ).stdout;
-    log(output);
+    await log(output);
 
     const errorJsonPath = `${buildDir}/error.json`;
     if (existsSync(errorJsonPath)) {
@@ -290,7 +298,7 @@ async function auditPackage(packageName) {
 
     // npm tarballs always have a top-level "package/" directory, so the final
     // step is to diff those against each other:
-    log("Diffing", builtContentPath, "against", publishedContentPath);
+    await log("Diffing", builtContentPath, "against", publishedContentPath);
     try {
       await run("diff", "-ur", builtContentPath, publishedContentPath);
       resultJson.contentMatches = true;
@@ -300,8 +308,8 @@ async function auditPackage(packageName) {
         throw "diff failed, but with no output";
       }
       resultJson.contentMatches = false;
-      log("Mismatch! Diff:");
-      log(diff);
+      await log("Mismatch! Diff:");
+      await log(diff);
 
       // Next we parse the output from `diff` to get a list of what files have
       // been changed and how, and then we determine whether all of those
@@ -350,10 +358,11 @@ async function auditPackage(packageName) {
         }
       }
 
-      log("Summary of files changed:", JSON.stringify(changes, null, 2));
+      await log("Summary of files changed:", JSON.stringify(changes, null, 2));
 
       // Now evaluate whether every single change in the diff matches a known
       // benign reason for a mismatch to be present.
+      let dubiousChange;
       resultJson.isKnownBenignMismatch = changes.every((change) => {
         // 1. Sometimes the published version includes CHANGELOG.md but our
         //    generated version doesn't, because npm's rules on packing
@@ -385,9 +394,16 @@ async function auditPackage(packageName) {
           return true;
         }
 
-        log("Change", JSON.stringify(change), "does not appear benign");
+        dubiousChange = change;
         return false;
       });
+      if (!resultJson.isKnownBenignMismatch) {
+        await log(
+          "Change",
+          JSON.stringify(dubiousChange),
+          "does not appear benign",
+        );
+      }
     }
   } catch (e) {
     let category, msg;
@@ -412,10 +428,21 @@ async function auditPackage(packageName) {
         msg = e;
       }
     }
-    log("Failed with error category", category);
-    log(msg);
+    await log("Failed with error category", category);
+    await log(msg);
     resultJson.errorCategory = category;
   } finally {
+    // Make sure the writeable log stream has flushed everything.
+    // I am not sure if this stuff is really necessary, because the docs kinda
+    // suck; am including it because I'm paranoid.
+    let logsAllWrittenResolve;
+    const logsAllWrittenPromise = new Promise((resolve, _) => {
+      logsAllWrittenResolve = resolve;
+    });
+    logStream.on("finish", logsAllWrittenResolve);
+    logStream.end();
+    await logsAllWrittenPromise;
+
     // Write the results to disk:
     await writeFile(`${packageDir}/results.json`, JSON.stringify(resultJson));
   }
