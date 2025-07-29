@@ -123,10 +123,11 @@ try {
     // `v1.2.3`, so we try both
     let tagExisted = false;
     for (const tagName of [
-      version,
-      `v${version}`,
       `${packageName}-${version}`,
       `${packageName}-v${version}`, // Used by yargs-parser
+      `${packageName}@${version}`, // Used by agent-base / proxy-agents
+      version,
+      `v${version}`,
     ]) {
       try {
         await git("checkout", `refs/tags/${tagName}`);
