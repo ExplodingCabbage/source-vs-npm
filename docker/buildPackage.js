@@ -74,6 +74,7 @@ try {
   // We try to detect that here and adjust the build and pack process
   // accordingly later.
   let packageSubdir = null; // null means this is NOT a multipackage monorepo
+
   for (const possibleSubfolderName of [
     `${repoRoot}/${packageName}`,
     `${repoRoot}/packages/${packageName}`,
@@ -81,6 +82,33 @@ try {
     if (existsSync(`${possibleSubfolderName}/package.json`)) {
       packageSubdir = possibleSubfolderName;
       break;
+    }
+  }
+  if (!packageSubdir && packageName.includes("/")) {
+    // Example:
+    // packageName: @babel/types
+    //   namespace: @babel
+    //     subname: types
+    //      noAtNs: babel
+    // noAtPkgName: babel/types
+    const [namespace, subname] = packageName.split("/");
+    const noAtNs = namespace.replace("@", "");
+    const noAtPkgName = packageName.replace("@", "");
+
+    for (const possibleSubfolderName of [
+      `${repoRoot}/${packageName}`,
+      `${repoRoot}/packages/${packageName}`,
+      `${repoRoot}/${noAtPkgName}`,
+      `${repoRoot}/packages/${noAtPkgName}`,
+      `${repoRoot}/${noAtNs}-${subname}`,
+      // Example: @babel/types package lives at
+      //          https://github.com/babel/babel/tree/main/packages/babel-types
+      `${repoRoot}/packages/${noAtNs}-${subname}`,
+    ]) {
+      if (existsSync(`${possibleSubfolderName}/package.json`)) {
+        packageSubdir = possibleSubfolderName;
+        break;
+      }
     }
   }
 
@@ -161,6 +189,11 @@ try {
         await run([pkgMngr, "run", "build"]);
       }
     }
+  }
+
+  // Special-snowflake logic for the Babel monorepo, which uses Make
+  if (gitUrl === "https://github.com/babel/babel.git") {
+    await run(["make", "prepublish"]);
   }
 
   // Special-snowflake logic for the React monorepo - this is where it puts

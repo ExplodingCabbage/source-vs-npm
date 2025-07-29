@@ -51,4 +51,7 @@ export default {
   //       outputting functions in a different order to the published version,
   //       but dunno why and is hard to audit at a glance.
   qs: ["6.14.0"],
+
+  // https://github.com/mathiasbynens/jsesc/issues/74
+  jsesc: ["3.1.0"],
 };
