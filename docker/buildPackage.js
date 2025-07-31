@@ -119,16 +119,29 @@ try {
     // own package.json), skip all the other build steps, and pack.
     process.chdir(packageName.slice(1));
   } else {
-    // A version number on npm of `1.2.3` might correspond to a tag on GitHub of
-    // `v1.2.3`, so we try both
-    let tagExisted = false;
-    for (const tagName of [
+    // Hopefully the Git repo has a tag corresponding to the version we're
+    // auditing... but tag naming conventions are varied, so we've got to try
+    // a lot of possible tag names:
+    let possibleTagNames = [
       `${packageName}-${version}`,
       `${packageName}-v${version}`, // Used by yargs-parser
       `${packageName}@${version}`, // Used by agent-base / proxy-agents
+      `${packageName}/${version}`,
       version,
       `v${version}`,
-    ]) {
+    ];
+    if (packageName.includes("/")) {
+      const subname = packageName.split("/").pop();
+      possibleTagNames = [
+        `${subname}-${version}`,
+        `${subname}-v${version}`,
+        `${subname}@${version}`,
+        `${subname}/${version}`, // Used by @jridgewell/trace-mapping
+        ...possibleTagNames,
+      ];
+    }
+    let tagExisted = false;
+    for (const tagName of possibleTagNames) {
       try {
         await git("checkout", `refs/tags/${tagName}`);
         tagExisted = tagName;
