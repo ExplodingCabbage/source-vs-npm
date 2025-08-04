@@ -98,6 +98,8 @@ try {
     for (const possibleSubfolderName of [
       `${repoRoot}/${packageName}`,
       `${repoRoot}/packages/${packageName}`,
+      `${repoRoot}/${subname}`,
+      `${repoRoot}/packages/${subname}`,
       `${repoRoot}/${noAtPkgName}`,
       `${repoRoot}/packages/${noAtPkgName}`,
       `${repoRoot}/${noAtNs}-${subname}`,
