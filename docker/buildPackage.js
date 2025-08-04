@@ -182,13 +182,34 @@ try {
       });
     }
 
+    let buildScriptSucceeded = false;
     if (
       packageSubdir &&
       subdirPackageJson.scripts &&
       "build" in subdirPackageJson.scripts
     ) {
-      await run([pkgMngr, "run", "build"], { cwd: packageSubdir });
-    } else if (rootPackageJson.scripts && "build" in rootPackageJson.scripts) {
+      try {
+        await run([pkgMngr, "run", "build"], { cwd: packageSubdir });
+        buildScriptSucceeded = true;
+      } catch {
+        console.warn(
+          "Failed to run build script from package subdir",
+          packageSubdir,
+        );
+        console.warn(
+          "This can happen when packages in a monorepo depend on each other.",
+        );
+        console.warn(
+          "Will try to build from the top-level package.json, if possible.",
+        );
+      }
+    }
+
+    if (
+      !buildScriptSucceeded &&
+      rootPackageJson.scripts &&
+      "build" in rootPackageJson.scripts
+    ) {
       if (packageSubdir) {
         // First try passing the package name as an argument to the top-level
         // build script. Sometimes they take arguments!
