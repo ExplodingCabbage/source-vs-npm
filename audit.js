@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import process from "node:process";
 import { promisify } from "node:util";
 import { exec, execFile } from "node:child_process";
 import { mkdir, readFile, writeFile, rm, readdir } from "node:fs/promises";
@@ -13,11 +14,23 @@ import knownMismatches from "./knownMismatches.js";
 import { parsePatch } from "diff";
 import { topPackages } from "./topPackages.js";
 
-// TODO: 5000
-const N_PACKAGES = 100;
+const whatToAudit = process.argv.slice(2).map((arg) => arg.toLowerCase());
 
-// Should we rerun audits on packages that have previously passed?
-const RERUN_PASSING = false;
+if (whatToAudit.length == 0) {
+  console.error("No arguments received");
+  console.error("Usage examples:");
+  console.error("  ./audit all");
+  console.error("  ./audit failing");
+  console.error("  ./audit 'build:no tag match'");
+  console.error("  ./audit 'mismatch' 'build:unexpected-error'");
+  console.error("  ./audit 'mismatch' 'benign-mismatch'");
+  console.error("  ./audit lodash");
+  console.error("  ./audit diff prettier");
+  process.exit(1);
+}
+
+// TODO: 5000
+const N_PACKAGES = 1000;
 
 const packageNames = topPackages(N_PACKAGES);
 
@@ -81,15 +94,52 @@ async function auditPackage(packageName) {
   const packageDir = `${import.meta.dirname}/audits/${packageName}`;
   await mkdir(packageDir, { recursive: true });
 
-  // Skip?
-  if (!RERUN_PASSING) {
+  async function shouldSkip() {
+    if (whatToAudit.includes("all")) {
+      return false;
+    }
+    if (whatToAudit.includes(packageName.toLowerCase())) {
+      return false;
+    }
     const oldResultJson = JSON.parse(
       (await readFile(`${packageDir}/results.json`)).toString(),
     );
-    if (oldResultJson.contentMatches) {
-      return;
+    if (
+      !oldResultJson.contentMatches &&
+      !oldResultJson.isKnownBenignMismatch &&
+      whatToAudit.includes("failing")
+    ) {
+      return false;
     }
+    if (
+      oldResultJson.contentMatches === false &&
+      whatToAudit.includes("benign-mismatch")
+    ) {
+      return false;
+    }
+    if (
+      oldResultJson.contentMatches === false &&
+      !oldResultJson.isKnownBenignMismatch &&
+      whatToAudit.includes("mismatch")
+    ) {
+      return false;
+    }
+    if (whatToAudit.includes(oldResultJson.errorCategory?.toLowerCase())) {
+      return false;
+    }
+    return true;
   }
+
+  if (await shouldSkip()) {
+    console.log(
+      `Skipping ${packageName}. ${packageNamesQueue.length} left after this.`,
+    );
+    return;
+  }
+
+  console.log(
+    `Auditing ${packageName}. ${packageNamesQueue.length} left after this.`,
+  );
 
   // A summary of this run we will write to `packageDir`:
   const resultJson = {
@@ -453,9 +503,6 @@ const packageNamesQueue = [...packageNames].reverse();
 async function doAuditsUntilFinished() {
   while (packageNamesQueue.length > 0) {
     const packageName = packageNamesQueue.pop();
-    console.log(
-      `Auditing ${packageName}. ${packageNamesQueue.length} left after this.`,
-    );
     await auditPackage(packageName);
   }
 }
