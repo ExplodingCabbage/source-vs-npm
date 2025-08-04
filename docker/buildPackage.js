@@ -242,6 +242,13 @@ try {
     process.chdir(packageSubdir);
   }
 
+  // Some libraries (e.g. https://github.com/lydell/js-tokens) generate the
+  // package to publish in a /build subdirectory, with its own package.json; we
+  // need to change directory into there before running "pack".
+  if (existsSync(`./build/package.json`)) {
+    process.chdir("build");
+  }
+
   // Is there a clue in any package.json file that the clean-publish package
   // should be used for generating the published version? Clues could be:
   // - "clean-publish" being listed as a dev dependency
