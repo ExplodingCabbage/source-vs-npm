@@ -106,6 +106,7 @@ try {
       `${repoRoot}/packages/${noAtNs}-${subname}`,
     ]) {
       if (existsSync(`${possibleSubfolderName}/package.json`)) {
+        // TODO: We can get this from the registry metadata instead of guessing!
         packageSubdir = possibleSubfolderName;
         break;
       }
