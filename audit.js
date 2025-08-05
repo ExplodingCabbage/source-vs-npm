@@ -214,15 +214,22 @@ async function auditPackage(packageName) {
         "repository field in registry was null",
       );
     }
-    if (registryRespJson.repository.type != "git") {
+    if (
+      registryRespJson.repository.type != "git" &&
+      registryRespJson.repository.type // Assume Git if not specified
+    ) {
       throw new JobFailed(
         "not git",
         `repository.type was ${registryRespJson.repository.type}`,
       );
     }
 
-    // The "repository" field returned from the npm API always have a `git+`
-    // prefix:
+    // The "repository" field returned from the npm API is always EITHER just a
+    // string OR an object with a URL field which is a string that has a `git+`
+    // prefix, e.g.
+    //
+    // "repository":	"https://github.com/nodelib/nodelib/tree/master/packages/fs/fs.stat"
+    //
     // {
     //   "repository": {
     //     "type": "git",
@@ -239,7 +246,9 @@ async function auditPackage(packageName) {
     // > program without any modification
     //
     // Dumb, but it is what it is.
-    let repoUrl = registryRespJson.repository.url.replace(/^git\+/, "");
+    let repoUrl =
+      registryRespJson.repository.url || registryRespJson.repository;
+    repoUrl = repoUrl.replace(/^git\+/, "");
     // The next complication is that most repos are hosted on GitHub and lots
     // of package.json files still refer to the repo using the git:// protocol
     // that GitHub dropped support for in 2022 (see discussion at
