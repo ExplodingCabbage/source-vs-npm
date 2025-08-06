@@ -16,8 +16,7 @@
   <thead>
     <tr>
       <th>Package</th>
-      <!-- TODO: <th>Author</th> -->
-      <!-- TODO: <th>Repo</th> -->
+      <th>Repo</th>
       <!-- TODO: <th>Published</th> TODO: published date -->
       <th>Version</th>
       <th>Audit time</th>
@@ -63,6 +62,17 @@
     packageLink.target = "_blank";
     packageTd.appendChild(packageLink);
     tr.appendChild(packageTd);
+    const repoUrlTd = document.createElement("td");
+    if (pkg.repoUrl) {
+      const repoUrlLink = document.createElement("a");
+      repoUrlLink.textContent = "View repo";
+      repoUrlLink.href = pkg.repoUrl;
+      repoUrlLink.target = "_blank";
+      repoUrlTd.appendChild(repoUrlLink);
+    } else {
+      repoUrlTd.textContent = "(No repo)";
+    }
+    tr.appendChild(repoUrlTd);
     const versionTd = document.createElement("td");
     versionTd.textContent = pkg.version;
     tr.appendChild(versionTd);

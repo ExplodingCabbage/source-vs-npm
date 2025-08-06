@@ -263,6 +263,8 @@ async function auditPackage(packageName) {
       "https://github.com/",
     );
 
+    resultJson.repoUrl = repoUrl;
+
     // Create (if not exists) a folder to audit this version in:
     const versionDir = `${packageDir}/${version}`;
     await mkdir(versionDir, { recursive: true });
