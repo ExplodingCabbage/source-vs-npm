@@ -16,9 +16,13 @@
   <thead>
     <tr>
       <th>Package</th>
+      <!-- TODO: <th>Author</th> -->
+      <!-- TODO: <th>Repo</th> -->
+      <!-- TODO: <th>Published</th> TODO: published date -->
       <th>Version</th>
       <th>Audit time</th>
       <th>Result</th>
+      <!-- TODO: <th>Notes</th> TODO: tags with explanations on hover -->
       <th><!-- View log button --></th>
     </tr>
   </thead>
@@ -53,7 +57,11 @@
   for (const pkg of results) {
     const tr = document.createElement("tr");
     const packageTd = document.createElement("td");
-    packageTd.textContent = pkg.packageName;
+    const packageLink = document.createElement("a");
+    packageLink.textContent = pkg.packageName;
+    packageLink.href = `https://npmjs.org/package/${pkg.packageName}`;
+    packageLink.target = "_blank";
+    packageTd.appendChild(packageLink);
     tr.appendChild(packageTd);
     const versionTd = document.createElement("td");
     versionTd.textContent = pkg.version;

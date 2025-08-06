@@ -427,6 +427,8 @@ async function auditPackage(packageName) {
         //    .npmignore but our generated version doesn't, because the npm
         //    CLI's behaviour around whether those files get packed has
         //    changed over time.
+        //    (Example of .npmignore being published - isstream 0.1.2,
+        //    published in 2015.)
         if (
           change.type == "published-only" &&
           (change.path == "/CHANGELOG.md" || change.path == "/.npmignore")
