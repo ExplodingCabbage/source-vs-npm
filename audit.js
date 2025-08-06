@@ -423,10 +423,14 @@ async function auditPackage(packageName) {
       // benign reason for a mismatch to be present.
       let dubiousChange;
       resultJson.isKnownBenignMismatch = changes.every((change) => {
-        // 1. Sometimes the published version includes CHANGELOG.md but our
-        //    generated version doesn't, because npm's rules on packing
-        //    CHANGELOG.md by default have changed.
-        if (change.type == "published-only" && change.path == "/CHANGELOG.md") {
+        // 1. Sometimes the published version includes CHANGELOG.md or
+        //    .npmignore but our generated version doesn't, because the npm
+        //    CLI's behaviour around whether those files get packed has
+        //    changed over time.
+        if (
+          change.type == "published-only" &&
+          (change.path == "/CHANGELOG.md" || change.path == "/.npmignore")
+        ) {
           return true;
         }
 
