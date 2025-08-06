@@ -1,11 +1,8 @@
-# TODO
-
-* write everything
-* use real download-counts package
-
 # source-vs-npm
 
-A tool to check that the most popular npm packages contain what you get when you build them from source.
+A tool to check that npm packages contain what you get when you build them from source.
+
+TODO: Revise everything below
 
 Entry point is `auditAll.js`. When this is run:
 
