@@ -27,14 +27,6 @@ export default {
     "30.0.5",
   ],
 
-  // TODO: This one is kinda sketch. The differences in legacy.js LOOK to me
-  //       like they're caused by some difference in Babel version / Babel
-  //       plugin version / etc, but there are enough that it's a bit of work
-  //       to verify that there isn't something evil being smuggled in, and I
-  //       haven't fully done that.
-  //       Return to this on next publish?
-  ignore: ["7.0.5"],
-
   // A load of docs and config gets excluded from the published package via
   // some undocumented process. Whatever.
   postcss: ["8.5.6"],
@@ -46,11 +38,6 @@ export default {
 
   // pnpm reorders package.json keys for some reason
   ms: ["2.1.3"],
-
-  // TODO: Another sketchy one. Looks like browserify (probably uglifyify) is
-  //       outputting functions in a different order to the published version,
-  //       but dunno why and is hard to audit at a glance.
-  qs: ["6.14.0"],
 
   // https://github.com/mathiasbynens/jsesc/issues/74
   jsesc: ["3.1.0"],
