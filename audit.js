@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// TODO: WTF is going on with ms? Logs blank, says "no repo" in results.
 import process from "node:process";
 import { promisify } from "node:util";
 import { exec, execFile } from "node:child_process";
