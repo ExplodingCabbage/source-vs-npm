@@ -200,15 +200,6 @@ async function auditPackage(packageName) {
     const version = registryRespJson["dist-tags"].latest;
     resultJson.version = version;
 
-    if (
-      packageName in knownMismatches &&
-      knownMismatches[packageName].includes(version)
-    ) {
-      resultJson.contentMatches = false;
-      resultJson.isKnownBenignMismatch = true;
-      return;
-    }
-
     const publishedAt = registryRespJson.time[version];
     resultJson.publishedAt = publishedAt;
 
@@ -368,6 +359,10 @@ async function auditPackage(packageName) {
     const [publishedTarballFolderName] = await readdir(publishedDir);
     const publishedContentPath = `${publishedDir}/${publishedTarballFolderName}`;
 
+    const expectBenignMismatch =
+      packageName in knownMismatches &&
+      knownMismatches[packageName].includes(version);
+
     // npm tarballs always have a top-level "package/" directory, so the final
     // step is to diff those against each other:
     await log("Diffing", builtContentPath, "against", publishedContentPath);
@@ -383,105 +378,115 @@ async function auditPackage(packageName) {
       await log("Mismatch! Diff:");
       await log(diff);
 
-      // Next we parse the output from `diff` to get a list of what files have
-      // been changed and how, and then we determine whether all of those
-      // changes are known to be "benign" (based on a list of known-benign
-      // commonly-occurring differences between built and published versions)
+      if (expectBenignMismatch) {
+        resultJson.isKnownBenignMismatch = true;
+      } else {
+        // Next we parse the output from `diff` to get a list of what files have
+        // been changed and how, and then we determine whether all of those
+        // changes are known to be "benign" (based on a list of known-benign
+        // commonly-occurring differences between built and published versions)
 
-      // First parse lines like this:
-      //   Only in /home/mark/source-vs-npm/audits/cliui/9.0.1/published/package: CHANGELOG.md
-      const changes = Array.from(
-        diff
-          .matchAll(/^Only in (.+): (.+)$\n/gm)
-          .map(([_, folder, filename]) => {
-            if (folder.startsWith(publishedContentPath)) {
-              const sansPrefix = folder
-                .replace(publishedContentPath, "")
-                .replace(/^\//, "");
-              return {
-                type: "published-only",
-                path: `${sansPrefix}/${filename}`,
-              };
-            } else if (folder.startsWith(builtContentPath)) {
-              const sansPrefix = folder
-                .replace(builtContentPath, "")
-                .replace(/^\//, "");
-              return {
-                type: "build-only",
-                path: `${sansPrefix}/${filename}`,
-              };
-            } else
-              throw `unexpected only in line; folder: ${folder}; filename: ${filename}`;
-          }),
-      );
-
-      // Then strip out those lines, parse the remaining output (if any) with
-      // jsdiff, and check the diff headers to see which files have been
-      // modified:
-      diff = diff.replaceAll(/^Only in .+:.+$\n/gm, "").trim();
-      if (diff) {
-        const parsedPatch = parsePatch(diff);
-
-        for (const fileDiff of parsedPatch) {
-          changes.push({
-            type: "change",
-            path: fileDiff.newFileName.replace(publishedContentPath, ""),
-          });
-        }
-      }
-
-      await log("Summary of files changed:", JSON.stringify(changes, null, 2));
-
-      // Now evaluate whether every single change in the diff matches a known
-      // benign reason for a mismatch to be present.
-      let dubiousChange;
-      resultJson.isKnownBenignMismatch = changes.every((change) => {
-        // 1. Sometimes the published version includes CHANGELOG.md or
-        //    .npmignore but our generated version doesn't, because the npm
-        //    CLI's behaviour around whether those files get packed has
-        //    changed over time.
-        //    (Example of .npmignore being published - isstream 0.1.2,
-        //    published in 2015.)
-        if (
-          change.type == "published-only" &&
-          (change.path == "/CHANGELOG.md" || change.path == "/.npmignore")
-        ) {
-          return true;
-        }
-
-        // 2. Some packages (e.g. cliui) publish tsconfig.tsbuildinfo, an
-        //    intermediate build artifact from incremental TypeScript
-        //    compilation that doesn't reliably end up with the same content
-        //    when rebuilding from scratch.
-        //    (Presumably its content depends in part on the order in which
-        //    different files were incrementally built.)
-        //    Ignore any differences in that file:
-        if (change.path.endsWith("/tsconfig.tsbuildinfo")) {
-          return true;
-        }
-
-        // 3. In @types packages, the `package.json`, `README.md` and `LICENSE`
-        //    files are generated by
-        //    https://github.com/microsoft/DefinitelyTyped-tools/blob/main/packages/publisher/src/generate-packages.ts
-        //    in a way we simply don't bother to replicate, so we assume here
-        //    any differences in those files are benign:
-        if (
-          packageName.startsWith("@types/") &&
-          ["/package.json", "/README.md", "/LICENSE"].includes(change.path)
-        ) {
-          return true;
-        }
-
-        dubiousChange = change;
-        return false;
-      });
-      if (!resultJson.isKnownBenignMismatch) {
-        await log(
-          "Change",
-          JSON.stringify(dubiousChange),
-          "does not appear benign",
+        // First parse lines like this:
+        //   Only in /home/mark/source-vs-npm/audits/cliui/9.0.1/published/package: CHANGELOG.md
+        const changes = Array.from(
+          diff
+            .matchAll(/^Only in (.+): (.+)$\n/gm)
+            .map(([_, folder, filename]) => {
+              if (folder.startsWith(publishedContentPath)) {
+                const sansPrefix = folder
+                  .replace(publishedContentPath, "")
+                  .replace(/^\//, "");
+                return {
+                  type: "published-only",
+                  path: `${sansPrefix}/${filename}`,
+                };
+              } else if (folder.startsWith(builtContentPath)) {
+                const sansPrefix = folder
+                  .replace(builtContentPath, "")
+                  .replace(/^\//, "");
+                return {
+                  type: "build-only",
+                  path: `${sansPrefix}/${filename}`,
+                };
+              } else
+                throw `unexpected only in line; folder: ${folder}; filename: ${filename}`;
+            }),
         );
+
+        // Then strip out those lines, parse the remaining output (if any) with
+        // jsdiff, and check the diff headers to see which files have been
+        // modified:
+        diff = diff.replaceAll(/^Only in .+:.+$\n/gm, "").trim();
+        if (diff) {
+          const parsedPatch = parsePatch(diff);
+
+          for (const fileDiff of parsedPatch) {
+            changes.push({
+              type: "change",
+              path: fileDiff.newFileName.replace(publishedContentPath, ""),
+            });
+          }
+        }
+
+        await log(
+          "Summary of files changed:",
+          JSON.stringify(changes, null, 2),
+        );
+
+        // Now evaluate whether every single change in the diff matches a known
+        // benign reason for a mismatch to be present.
+        let dubiousChange;
+        resultJson.isKnownBenignMismatch = changes.every((change) => {
+          // 1. Sometimes the published version includes CHANGELOG.md or
+          //    .npmignore but our generated version doesn't, because the npm
+          //    CLI's behaviour around whether those files get packed has
+          //    changed over time.
+          //    (Example of .npmignore being published - isstream 0.1.2,
+          //    published in 2015.)
+          if (
+            change.type == "published-only" &&
+            (change.path == "/CHANGELOG.md" || change.path == "/.npmignore")
+          ) {
+            return true;
+          }
+
+          // 2. Some packages (e.g. cliui) publish tsconfig.tsbuildinfo, an
+          //    intermediate build artifact from incremental TypeScript
+          //    compilation that doesn't reliably end up with the same content
+          //    when rebuilding from scratch.
+          //    (Presumably its content depends in part on the order in which
+          //    different files were incrementally built.)
+          //    Ignore any differences in that file:
+          if (change.path.endsWith("/tsconfig.tsbuildinfo")) {
+            return true;
+          }
+
+          // 3. In @types packages, the `package.json`, `README.md` and `LICENSE`
+          //    files are generated by
+          //    https://github.com/microsoft/DefinitelyTyped-tools/blob/main/packages/publisher/src/generate-packages.ts
+          //    in a way we simply don't bother to replicate, so we assume here
+          //    any differences in those files are benign:
+          if (
+            packageName.startsWith("@types/") &&
+            ["/package.json", "/README.md", "/LICENSE"].includes(change.path)
+          ) {
+            return true;
+          }
+
+          dubiousChange = change;
+          return false;
+        });
+        if (!resultJson.isKnownBenignMismatch) {
+          await log(
+            "Change",
+            JSON.stringify(dubiousChange),
+            "does not appear benign",
+          );
+        }
       }
+    }
+    if (expectBenignMismatch && resultJson.contentMatches) {
+      throw "expected a benign mismatch, but content matched";
     }
   } catch (e) {
     let category;
