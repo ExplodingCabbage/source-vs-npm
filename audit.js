@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-
+// TODO: WTF is going on with ms? Logs blank, says "no repo" in results.
 import process from "node:process";
 import { promisify } from "node:util";
 import { exec, execFile } from "node:child_process";
@@ -30,7 +30,7 @@ if (whatToAudit.length == 0) {
 }
 
 // TODO: 5000
-const N_PACKAGES = 1000;
+const N_PACKAGES = 20;
 
 const packageNames = topPackages(N_PACKAGES);
 
@@ -75,17 +75,11 @@ const imageId = (
  *        or a string (which will just be logged).
  */
 class JobFailed extends Error {
-  constructor(category, msgOrError) {
+  constructor(category, explanation, errorObj = null) {
     super();
     this.category = category;
-    if (msgOrError instanceof Error) {
-      this.msg = `Caused by ${msgOrError.__proto__.name}: ${msgOrError.message}`;
-      if (msgOrError.stack) {
-        this.msg += "\n" + msgOrError.stack;
-      }
-    } else {
-      this.msg = msgOrError;
-    }
+    this.explanation = explanation;
+    this.error = errorObj;
   }
 }
 
@@ -145,6 +139,19 @@ async function auditPackage(packageName) {
   const resultJson = {
     packageName: packageName,
     startTime: new Date().toISOString(),
+    // TODO: Populate with the following things to show in the table:
+    //       - special handling for React repo
+    //       - special handling for DefinitelyTyped repo
+    //       - was package in a subdir in the repo?
+    //       - any failed build attempts we made
+    // TODO: use these properties from buildResult.json
+    // - usesCleanPublish
+    // - isPackedFromBuildDir
+    // - isReact
+    // - isBabel
+    // - isDefinitelyTyped
+    // - successfulBuildCommand
+    labels: [],
   };
 
   // Create a log file. Timestamp in name avoids overwriting old ones.
@@ -203,6 +210,7 @@ async function auditPackage(packageName) {
     }
 
     const publishedAt = registryRespJson.time[version];
+    resultJson.publishedAt = publishedAt;
 
     const tarballUrl = registryRespJson.versions[version].dist.tarball;
     if (!tarballUrl.endsWith(".tgz")) {
@@ -211,7 +219,7 @@ async function auditPackage(packageName) {
     if (!registryRespJson.repository) {
       throw new JobFailed(
         "no repository",
-        "repository field in registry was null",
+        "repository field in registry was null or absent",
       );
     }
     if (
@@ -306,29 +314,23 @@ async function auditPackage(packageName) {
     ).stdout;
     await log(output);
 
-    const errorJsonPath = `${buildDir}/error.json`;
-    if (existsSync(errorJsonPath)) {
-      const buildErrorCode = JSON.parse(
-        await readFile(errorJsonPath),
-      ).errorCode;
+    const buildJsonPath = `${buildDir}/buildResult.json`;
+    if (!existsSync(buildJsonPath)) {
+      throw "buildPackage.js failed to write a buildResult.json file";
+    }
+    const buildResultJson = JSON.parse(await readFile(buildJsonPath));
+    resultJson.buildDetails = buildResultJson;
+    if (buildResultJson.errorCode) {
       throw new JobFailed(
-        `build:${buildErrorCode}`,
-        `Build failed and reported error code ${buildErrorCode}`,
+        `build:${buildResultJson.errorCode}`,
+        `Build failed and reported error code ${buildResultJson.errorCode}`,
       );
     }
 
-    // If the build script didn't output an error, it will have output a
-    // tarball containing the packed files (and this will be the only thing in
-    // the build dir):
-    const buildDirContents = await readdir(buildDir);
-    if (buildDirContents.length != 1) {
-      throw "unexpected /build contents: " + buildDirContents;
+    const tgzFilename = buildResultJson.tarballFilename;
+    if (!tgzFilename) {
+      throw "buildResult.json included neither an error nor a tarballFilename";
     }
-    const [tgzFilename] = buildDirContents;
-    if (!tgzFilename.endsWith(".tgz")) {
-      throw "unexpected filename in /build: " + tgzFilename;
-    }
-
     await run("tar", "-C", buildDir, "-xzf", `${buildDir}/${tgzFilename}`);
     await rm(`${buildDir}/${tgzFilename}`);
     // As described at
@@ -339,7 +341,16 @@ async function auditPackage(packageName) {
     // there are exceptions - e.g.
     // https://registry.npmjs.org/@types/node/-/node-24.0.14.tgz
     // Therefore we need to check the name of the folder we've extracted here:
-    const [buildTarballFolderName] = await readdir(buildDir);
+    const extractedFiles = (await readdir(buildDir)).filter(
+      (filename) => filename != "buildResult.json",
+    );
+    if (extractedFiles.length !== 1) {
+      throw new Error(
+        "expected build tarball to have exactly 1 top-level item (a folder);" +
+          `but got ${extractedFiles.length}`,
+      );
+    }
+    const [buildTarballFolderName] = extractedFiles;
     const builtContentPath = `${buildDir}/${buildTarballFolderName}`;
 
     // If we successfully ran a build, next we need to download the version
@@ -473,31 +484,41 @@ async function auditPackage(packageName) {
       }
     }
   } catch (e) {
-    let category, msg;
+    let category;
     if (e instanceof JobFailed) {
-      category = e.category;
-      msg = e.msg;
+      resultJson.error = {
+        category: e.category,
+        explanation: e.explanation,
+      };
+      await log("Failed with error", category);
+      if (e.error) {
+        await log(`Caused by ${e.error.__proto__.name}: ${e.error.message}`);
+        if (e.error.stack) {
+          await log(e.error.stack);
+        }
+      }
     } else {
-      category = "unexpected crash";
+      resultJson.error = {
+        category: "unexpected crash",
+        explanation:
+          "An unexpected error was thrown in audit.js; check the log to debug.",
+      };
       if (e instanceof Error) {
         if (e.stdout || e.stderr) {
-          msg = `Command failed with an error. Stack: ${e.stack}\n`;
+          await log(`Command failed with an error. Stack: ${e.stack}`);
           if (e.stdout) {
-            msg += `stdout: ${e.stdout}\n`;
+            await log(`stdout: ${e.stdout}`);
           }
           if (e.stderr) {
-            msg += `stderr: ${e.stderr}\n`;
+            await log(`stderr: ${e.stderr}`);
           }
         } else {
-          msg = e.stack;
+          await log(e.stack);
         }
       } else {
-        msg = e;
+        await log(e);
       }
     }
-    await log("Failed with error category", category);
-    await log(msg);
-    resultJson.errorCategory = category;
   } finally {
     // Make sure the writeable log stream has flushed everything.
     // I am not sure if this stuff is really necessary, because the docs kinda

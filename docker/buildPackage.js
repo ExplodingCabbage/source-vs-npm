@@ -27,6 +27,8 @@ console.log(
   gitUrl,
 );
 
+const buildResult = {};
+
 async function run(command, options) {
   console.log("Running", command, "with options:", options);
   try {
@@ -62,12 +64,17 @@ class BuildFailed extends Error {
 // Giant try/catch that all the logic runs in. If we get an error, we stick it
 // in an error.json file.
 try {
-  await git("clone", gitUrl, "gitrepo");
+  try {
+    await git("clone", gitUrl, "gitrepo");
+  } catch {
+    throw new BuildFailed("clone failed");
+  }
   process.chdir("gitrepo");
   const repoRoot = process.cwd();
   const useYarn = existsSync("yarn.lock");
   const usePnpm = existsSync("pnpm-lock.yaml");
   const pkgMngr = useYarn ? "yarn" : usePnpm ? "pnpm" : "npm";
+  buildResult.packageManager = pkgMngr;
 
   // Some multi-package monorepos like https://github.com/eslint/js have
   // individual packages in folders within a /packages/ top-level folder.
@@ -114,8 +121,10 @@ try {
       }
     }
   }
+  buildResult.subdir = packageSubdir;
 
   if (packageName.startsWith("@types/")) {
+    buildResult.isDefinitelyTyped = true;
     // @types packages all come from the DefinitelyTyped repo which contains
     // a bajillion small packages within it.
     // We just change to the directory for this package (which will have its
@@ -159,6 +168,7 @@ try {
       console.error("Couldn't find a Git tag matching the npm version");
       throw new BuildFailed("no tag match");
     }
+    buildResult.tag = tagExisted;
     console.log("Checked out", tagExisted);
   }
 
@@ -168,6 +178,14 @@ try {
     subdirPackageJson = JSON.parse(
       await readFile(`${packageSubdir}/package.json`),
     );
+  }
+
+  let hasBuilt = false;
+  async function attemptBuild(cmd, subdir) {
+    await run(cmd, { cwd: subdir });
+    buildResult.successfulBuildCommand = cmd;
+    buildResult.ranBuildFrom = subdir;
+    hasBuilt = true;
   }
 
   if (!packageName.startsWith("@types/")) {
@@ -184,15 +202,13 @@ try {
       });
     }
 
-    let buildScriptSucceeded = false;
     if (
       packageSubdir &&
       subdirPackageJson.scripts &&
       "build" in subdirPackageJson.scripts
     ) {
       try {
-        await run([pkgMngr, "run", "build"], { cwd: packageSubdir });
-        buildScriptSucceeded = true;
+        await attemptBuild([pkgMngr, "run", "build"], packageSubdir);
       } catch {
         console.warn(
           "Failed to run build script from package subdir",
@@ -208,7 +224,7 @@ try {
     }
 
     if (
-      !buildScriptSucceeded &&
+      !hasBuilt &&
       rootPackageJson.scripts &&
       "build" in rootPackageJson.scripts
     ) {
@@ -216,27 +232,29 @@ try {
         // First try passing the package name as an argument to the top-level
         // build script. Sometimes they take arguments!
         try {
-          await run([pkgMngr, "run", "build", packageName]);
+          await attemptBuild([pkgMngr, "run", "build", packageName]);
         } catch {
           // If that fails, just run it with no arguments. Probably this builds
           // lots of packages and is slow, but if that's the only option, we
           // just have to suck it up.
-          await run([pkgMngr, "run", "build"]);
+          await attemptBuild([pkgMngr, "run", "build"]);
         }
       } else {
-        await run([pkgMngr, "run", "build"]);
+        await attemptBuild([pkgMngr, "run", "build"]);
       }
     }
   }
 
   // Special-snowflake logic for the Babel monorepo, which uses Make
   if (gitUrl === "https://github.com/babel/babel.git") {
-    await run(["make", "prepublish"]);
+    buildResult.isBabel = true;
+    await attemptBuild(["make", "prepublish"]);
   }
 
   // Special-snowflake logic for the React monorepo - this is where it puts
   // built packages ready to be packed!
   if (gitUrl === "https://github.com/facebook/react.git") {
+    buildResult.isReact = true;
     process.chdir(`build/oss-stable-semver/${packageName}`);
   } else if (packageSubdir) {
     process.chdir(packageSubdir);
@@ -246,6 +264,7 @@ try {
   // package to publish in a /build subdirectory, with its own package.json; we
   // need to change directory into there before running "pack".
   if (existsSync(`./build/package.json`)) {
+    buildResult.isPackedFromBuildDir = true;
     process.chdir("build");
   }
 
@@ -258,6 +277,8 @@ try {
     subdirPackageJson?.devDependencies?.["clean-publish"] ||
     rootPackageJson["clean-publish"] ||
     subdirPackageJson?.["clean-publish"];
+
+  buildResult.usesCleanPublish = useCleanPublish;
 
   let finalTgz;
   if (useCleanPublish) {
@@ -313,14 +334,14 @@ try {
 
   // Move the final tgz to host-bound output folder we set up in the Dockerfile
   await copyFile(finalTgz, `/home/node/build/${finalTgz}`);
+  buildResult.tarballFilename = finalTgz;
   console.log("Successfully wrote packed .tgz file to the build directory");
 } catch (e) {
-  let errJson;
   if (e instanceof BuildFailed) {
     console.error("Build failed due to:", e.errorCode);
-    errJson = { errorCode: e.errorCode };
+    buildResult.errorCode = e.errorCode;
   } else {
-    errJson = { errorCode: "unexpected-error" };
+    buildResult.errorCode = "unexpected-error";
     // Output the error and stack trace (which will then be captured and logged
     // to a file by auditAll.js)
     console.error("Build failed with unexpected error:");
@@ -330,5 +351,9 @@ try {
       console.error(e);
     }
   }
-  fs.writeFileSync("/home/node/build/error.json", JSON.stringify(errJson));
 }
+
+fs.writeFileSync(
+  "/home/node/build/buildResult.json",
+  JSON.stringify(buildResult),
+);

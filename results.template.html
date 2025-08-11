@@ -17,12 +17,13 @@
     <tr>
       <th>Package</th>
       <th>Repo</th>
-      <!-- TODO: <th>Published</th> TODO: published date -->
+      <th>Published</th>
       <th>Version</th>
       <th>Audit time</th>
       <th>Result</th>
-      <!-- TODO: <th>Notes</th> TODO: tags with explanations on hover -->
+      <!-- TODO: <th></th> TODO: tags with explanations on hover -->
       <th><!-- View log button --></th>
+      <!-- TODO: human-written notes about individual package versions: <th>Notes</th> -->
     </tr>
   </thead>
   <tbody id="resultsTableBody"></tbody>
@@ -73,6 +74,9 @@
       repoUrlTd.textContent = "(No repo)";
     }
     tr.appendChild(repoUrlTd);
+    const publishedAtTd = document.createElement("td");
+    publishedAtTd.textContent = pkg.publishedAt;
+    tr.appendChild(publishedAtTd);
     const versionTd = document.createElement("td");
     versionTd.textContent = pkg.version;
     tr.appendChild(versionTd);
