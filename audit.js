@@ -492,13 +492,12 @@ async function auditPackage(packageName) {
       throw "expected a benign mismatch, but content matched";
     }
   } catch (e) {
-    let category;
     if (e instanceof JobFailed) {
       resultJson.error = {
         category: e.category,
         explanation: e.explanation,
       };
-      await log("Failed with error", category);
+      await log("Failed with error", e.category);
       if (e.error) {
         await log(`Caused by ${e.error.__proto__.name}: ${e.error.message}`);
         if (e.error.stack) {
