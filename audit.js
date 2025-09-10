@@ -193,7 +193,11 @@ async function auditPackage(packageName) {
       const resp = await fetch(`https://registry.npmjs.org/${packageName}`);
       registryRespJson = await resp.json();
     } catch (e) {
-      throw new JobFailed("reg fetch failed", e);
+      throw new JobFailed(
+        "reg fetch failed",
+        "No response from the npm registry when requesting package info",
+        e,
+      );
     }
 
     const version = registryRespJson["dist-tags"].latest;
