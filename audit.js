@@ -164,7 +164,7 @@ async function auditPackage(packageName) {
 
   async function writeStringToLog(string) {
     if (!logStream.write(string)) {
-      const drainPromise = new Promise((resolve, _) => {
+      const drainPromise = new Promise((resolve) => {
         drainPromiseResolver = resolve;
       });
       await drainPromise;
@@ -531,7 +531,7 @@ async function auditPackage(packageName) {
     // I am not sure if this stuff is really necessary, because the docs kinda
     // suck; am including it because I'm paranoid.
     let logsAllWrittenResolve;
-    const logsAllWrittenPromise = new Promise((resolve, _) => {
+    const logsAllWrittenPromise = new Promise((resolve) => {
       logsAllWrittenResolve = resolve;
     });
     logStream.on("finish", logsAllWrittenResolve);
