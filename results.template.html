@@ -8,6 +8,13 @@
   td,
   th {
     border: 1px solid black;
+    padding: 1px;
+  }
+  .pill {
+    display: inline-block;
+    border-radius: 3px;
+    margin: 0 3px;
+    border: 1px solid black;
   }
 </style>
 <h4>Stats:</h4>
@@ -21,7 +28,7 @@
       <th>Version</th>
       <th>Audit time</th>
       <th>Result</th>
-      <!-- TODO: <th></th> TODO: tags with explanations on hover -->
+      <th>Special traits</th>
       <th><!-- View log button --></th>
       <!-- TODO: human-written notes about individual package versions: <th>Notes</th> -->
     </tr>
@@ -98,6 +105,31 @@
       tr.style.backgroundColor = "red";
     }
     tr.appendChild(resultTd);
+    const traitsTd = document.createElement("td");
+    function addPill(text, color) {
+      const pill = document.createElement("div");
+      pill.classList.add("pill");
+      pill.textContent = text;
+      pill.style.backgroundColor = color;
+      traitsTd.appendChild(pill);
+    }
+    if (pkg.buildDetails?.usesCleanPublish) {
+      addPill("clean-publish", "white");
+    }
+    if (pkg.buildDetails?.isPackedFromBuildDir) {
+      addPill("/build", "lightsalmon");
+    }
+    if (pkg.buildDetails?.isReact) {
+      addPill("react", "rgb(8, 126, 164)");
+    }
+    if (pkg.buildDetails?.isBabel) {
+      addPill("babel", "#eeda7c");
+    }
+    if (pkg.buildDetails?.isDefinitelyTyped) {
+      addPill("@types", "blue");
+    }
+    tr.appendChild(traitsTd);
+
     const logsTd = document.createElement("td");
     const logsLink = document.createElement("a");
     logsLink.textContent = "View log";

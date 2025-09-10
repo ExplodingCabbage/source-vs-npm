@@ -29,7 +29,7 @@ if (whatToAudit.length == 0) {
 }
 
 // TODO: 5000
-const N_PACKAGES = 20;
+const N_PACKAGES = 250;
 
 const packageNames = topPackages(N_PACKAGES);
 
@@ -138,17 +138,7 @@ async function auditPackage(packageName) {
   const resultJson = {
     packageName: packageName,
     startTime: new Date().toISOString(),
-    // TODO: Populate with the following things to show in the table:
-    //       - special handling for React repo
-    //       - special handling for DefinitelyTyped repo
-    //       - was package in a subdir in the repo?
-    //       - any failed build attempts we made
     // TODO: use these properties from buildResult.json
-    // - usesCleanPublish
-    // - isPackedFromBuildDir
-    // - isReact
-    // - isBabel
-    // - isDefinitelyTyped
     // - successfulBuildCommand
     labels: [],
   };
