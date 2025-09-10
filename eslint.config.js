@@ -1,9 +1,14 @@
 import js from "@eslint/js";
+import { includeIgnoreFile } from "@eslint/compat";
 import globals from "globals";
 import json from "@eslint/json";
 import { defineConfig, globalIgnores } from "eslint/config";
 
 export default defineConfig([
+  includeIgnoreFile(
+    `${import.meta.dirname}/.gitignore`,
+    "Imported .gitignore patterns",
+  ),
   {
     files: ["**/*.{js,mjs,cjs}"],
     plugins: { js },
