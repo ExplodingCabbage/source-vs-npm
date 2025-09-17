@@ -49,10 +49,14 @@ async function run(...command) {
 
 /**
  * Run the given command as a shell command, redirecting stderr to stdout so
- * that output will be interleaved.
+ * that output will be interleaved, and relaxing Node's default max buffer size
+ * in case that output is large.
  */
 async function runShell(...command) {
-  return await promisify(exec)(command.map(escapeShellArg).join(" ") + " 2>&1");
+  return await promisify(exec)(
+    command.map(escapeShellArg).join(" ") + " 2>&1",
+    { maxBuffer: 1024 * 1024 * 250 }, // 250MiB
+  );
 }
 
 // Nicked from https://stackoverflow.com/a/22827128/1709587
