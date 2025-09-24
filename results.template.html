@@ -48,7 +48,7 @@
     } else if (pkg.contentMatches === false) {
       stats["Mismatch"] = (stats["Mismatch"] || 0) + 1;
     } else {
-      stats[pkg.errorCategory] = (stats[pkg.errorCategory] || 0) + 1;
+      stats[pkg.error.category] = (stats[pkg.error.category] || 0) + 1;
     }
   }
   for (const [result, count] of Object.entries(stats).sort(
@@ -101,7 +101,8 @@
       resultTd.textContent = "Mismatch";
       tr.style.backgroundColor = "red";
     } else {
-      resultTd.textContent = pkg.errorCategory;
+      resultTd.textContent = pkg.error.category;
+      resultTd.title = pkg.error.explanation;
       tr.style.backgroundColor = "red";
     }
     tr.appendChild(resultTd);
