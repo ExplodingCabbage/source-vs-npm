@@ -3,20 +3,21 @@
  * and cache the list in a file where it can be instantly reread later.
  */
 
+// TODO: autoupdate download-counts at runtime
+
 import { readFileSync, writeFileSync } from "node:fs";
 import dcPkgJson from "download-counts/package.json" with { type: "json" };
 
 const dcVersion = dcPkgJson.version;
+const repoRoot = `${import.meta.dirname}/..`;
 
 export function sortedPackages() {
-  const cacheLocation = `${import.meta.dirname}/cache/packageList/${dcVersion}-all.json`;
+  const cacheLocation = `${repoRoot}/cache/packageList/${dcVersion}-all.json`;
   try {
     return JSON.parse(readFileSync(cacheLocation).toString());
   } catch {
     const allDcs = JSON.parse(
-      readFileSync(
-        `${import.meta.dirname}/node_modules/download-counts/counts.json`,
-      ),
+      readFileSync(`${repoRoot}/node_modules/download-counts/counts.json`),
     );
     const sortedDcs = Object.entries(allDcs).sort(
       ([_, countA], [__, countB]) => countB - countA,
@@ -27,7 +28,7 @@ export function sortedPackages() {
 }
 
 export function topPackages(n) {
-  const cacheLocation = `${import.meta.dirname}/cache/packageList/${dcVersion}-top${n}.json`;
+  const cacheLocation = `${repoRoot}/cache/packageList/${dcVersion}-top${n}.json`;
   try {
     return JSON.parse(readFileSync(cacheLocation).toString());
   } catch {
