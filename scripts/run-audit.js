@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 import process from "node:process";
+import { readFileSync, writeFileSync } from "node:fs";
+import { execFile } from "node:child_process";
 import { auditPackages } from "../audit/auditPackages.js";
 import { auditTop } from "../audit/auditTopN.js";
+
+const repoRoot = `${import.meta.dirname}/..`;
 
 // TODO: support saving to a local database OR outputting to terminal OR outputting to a HTML file with results baked in
 // TODO: support scripts outside the top N; support running ./run-audit.js top200 or whatever
@@ -24,10 +28,24 @@ if (whatToAudit.length == 0) {
   process.exit(1);
 }
 
+let results = [];
 if (whatToAudit.length == 1 && /top\d+/.test(whatToAudit[0])) {
   const n = Number(whatToAudit[0].slice(3));
-  await auditTop(n);
+  results = await auditTop(n);
 } else {
   // Assume the arguments are individual package names
-  await auditPackages(whatToAudit);
+  results = await auditPackages(whatToAudit);
 }
+
+// Populate the results template and view results
+const resultsHtml = readFileSync(`${repoRoot}/results.template.html`)
+  .toString()
+  .replace(
+    "PLACEHOLDER",
+    // Escaping forward slashes, not done by JSON.stringify by default, avoids
+    // breaking out of our <script> element if allResults contains the text
+    // "</script>" in a string for some reason.
+    JSON.stringify(results).replaceAll("/", "\\/"),
+  );
+writeFileSync(`${repoRoot}/results.html`, resultsHtml);
+execFile("open", ["results.html"]);
