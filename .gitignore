@@ -3,3 +3,5 @@
 /allResults.json
 /results.html
 /cache
+/dist
+*.log

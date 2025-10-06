@@ -3,6 +3,8 @@ import { includeIgnoreFile } from "@eslint/compat";
 import globals from "globals";
 import json from "@eslint/json";
 import { defineConfig, globalIgnores } from "eslint/config";
+import tseslint from "@typescript-eslint/eslint-plugin";
+import tsParser from "@typescript-eslint/parser";
 
 export default defineConfig([
   includeIgnoreFile(
@@ -10,7 +12,7 @@ export default defineConfig([
     "Imported .gitignore patterns",
   ),
   {
-    files: ["**/*.{js,mjs,cjs}"],
+    files: ["**/*.{js,mjs,cjs,ts}"],
     plugins: { js },
     extends: ["js/recommended"],
     rules: {
@@ -18,7 +20,18 @@ export default defineConfig([
     },
   },
   {
-    files: ["**/*.{js,mjs,cjs}"],
+    files: ["**/*.ts"],
+    plugins: { "@typescript-eslint": tseslint },
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: {
+        project: "./tsconfig.json",
+      },
+    },
+    extends: ["js/recommended", "plugin:@typescript-eslint/recommended"],
+  },
+  {
+    files: ["**/*.{js,mjs,cjs,ts}"],
     languageOptions: { globals: globals.browser },
   },
   {
