@@ -4,4 +4,6 @@ Tools to check that npm package contents match what you get when you build them 
 
 Summary of this repo's contents:
 
-TODO
+TODO: Add summary
+TODO: Add Postgres installation instructions
+TODO: Add usage instructions
