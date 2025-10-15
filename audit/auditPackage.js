@@ -1,7 +1,7 @@
 import { promisify } from "node:util";
 import { exec, execFile } from "node:child_process";
-import { mkdir, readFile, writeFile, rm, readdir } from "node:fs/promises";
-import { createWriteStream, existsSync } from "node:fs";
+import { mkdir, readFile, rm, readdir } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import knownMismatches from "./knownMismatches.js";
 import { parsePatch } from "diff";
 

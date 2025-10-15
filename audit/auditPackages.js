@@ -4,6 +4,7 @@ import { isNaughty, auditPackage } from "./auditPackage.js";
  * Audit multiple packages in parallel. Should be called once per script, with
  * a full list of packages to audit.
  */
+// TODO: Make this an async generator
 export async function auditPackages(packageNames) {
   packageNames = packageNames.filter((name) => !isNaughty(name));
   const MAX_SIMULTANEOUS_AUDITS = 5; // TODO: 10?

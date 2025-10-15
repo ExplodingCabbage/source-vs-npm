@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { auditPackages } from "../audit/auditPackages.js";
 import { auditTop } from "../audit/auditTopN.js";
+import { recordJobStart } from "../audit/database.js";
 
 const repoRoot = `${import.meta.dirname}/..`;
 
@@ -28,6 +29,9 @@ if (whatToAudit.length == 0) {
   process.exit(1);
 }
 
+const [recordPackageAuditResult, recordJobEnd] =
+  await recordJobStart(whatToAudit);
+
 let results = [];
 if (whatToAudit.length == 1 && /top\d+/.test(whatToAudit[0])) {
   const n = Number(whatToAudit[0].slice(3));
@@ -36,6 +40,12 @@ if (whatToAudit.length == 1 && /top\d+/.test(whatToAudit[0])) {
   // Assume the arguments are individual package names
   results = await auditPackages(whatToAudit);
 }
+
+for (const result of results) {
+  await recordPackageAuditResult(result);
+}
+
+await recordJobEnd();
 
 // Populate the results template and view results
 const resultsHtml = readFileSync(`${repoRoot}/results.template.html`)
