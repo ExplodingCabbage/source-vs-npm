@@ -12,6 +12,7 @@
   "dependencies": {
     "diff": "^8.0.2",
     "download-counts": "*",
+    "express": "^5.1.0",
     "pg": "^8.16.3"
   },
   "devDependencies": {
