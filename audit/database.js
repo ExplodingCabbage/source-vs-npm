@@ -6,13 +6,13 @@ import { query } from "../database/query.js";
  * recording that the whole job is finished.
  */
 export async function recordJobStart(jobArgs) {
-  const queryResult = await query(
+  const pgResult = await query(
     `INSERT INTO audit_job (started_at, args)
      VALUES (NOW(), $1)
      RETURNING id`,
     [jobArgs],
   );
-  const jobId = queryResult.rows[0].id;
+  const jobId = pgResult.rows[0].id;
 
   /**
    * Takes an object, `resultJson`, of the type returned by `auditPackage`,
@@ -35,4 +35,33 @@ export async function recordJobStart(jobArgs) {
     );
   }
   return [recordPackageAuditResult, recordJobEnd];
+}
+
+/**
+ * Return details of the most-recently-completed audit run.
+ */
+// TODO: This returns an object with col names as keys.
+//       Remove note of this fact when we migrate to typescript
+export async function latestCompletedRun() {
+  const pgResult = await query(
+    `SELECT id, started_at, finished_at, args
+    FROM audit_job
+    WHERE finished_at IS NOT NULL
+    ORDER BY finished_at DESC
+    LIMIT 1`,
+  );
+  return pgResult.rows[0];
+}
+
+/**
+ * Get all the per-package result data associated with a given audit run ID.
+ */
+export async function getRunResults(runId) {
+  const pgResult = await query(
+    `SELECT results
+    FROM package_audit
+    WHERE audit_run_id = $1`,
+    [runId],
+  );
+  return pgResult.rows.map((row) => row.results);
 }

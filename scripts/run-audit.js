@@ -1,12 +1,8 @@
 #!/usr/bin/env node
 import process from "node:process";
-import { readFileSync, writeFileSync } from "node:fs";
-import { execFile } from "node:child_process";
 import { auditPackages } from "../audit/auditPackages.js";
 import { auditTop } from "../audit/auditTopN.js";
 import { recordJobStart } from "../audit/database.js";
-
-const repoRoot = `${import.meta.dirname}/..`;
 
 // TODO: support saving to a local database OR outputting to terminal OR outputting to a HTML file with results baked in
 // TODO: support scripts outside the top N; support running ./run-audit.js top200 or whatever
@@ -46,16 +42,3 @@ for (const result of results) {
 }
 
 await recordJobEnd();
-
-// Populate the results template and view results
-const resultsHtml = readFileSync(`${repoRoot}/results.template.html`)
-  .toString()
-  .replace(
-    "PLACEHOLDER",
-    // Escaping forward slashes, not done by JSON.stringify by default, avoids
-    // breaking out of our <script> element if allResults contains the text
-    // "</script>" in a string for some reason.
-    JSON.stringify(results).replaceAll("/", "\\/"),
-  );
-writeFileSync(`${repoRoot}/results.html`, resultsHtml);
-execFile("open", ["results.html"]);
