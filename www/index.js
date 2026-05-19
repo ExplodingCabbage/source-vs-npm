@@ -1,9 +1,9 @@
 import express from "express";
-import { latestCompletedRun, getRunResults } from "../audit/database.js";
 import { readFileSync } from "node:fs";
+import { latestCompletedRun, getRunResults } from "../audit/database.js";
+import { listen } from "./listen.js";
 
 const app = express();
-const port = 3000;
 const repoRoot = `${import.meta.dirname}/..`;
 
 // TODO:
@@ -29,6 +29,6 @@ app.get("/", async (req, res) => {
   res.send(resultsHtml);
 });
 
-app.listen(port, () => {
-  console.log(`Listening on port ${port}`);
-});
+// Either listen HTTP or, if this is the prod server, listen on HTTPS and set
+// up automatic cert reloading.
+listen(app);

@@ -1,11 +1,11 @@
-import { query } from "../database/query.js";
+import { localQuery } from "../database/query.js";
 
 /**
  * Records to the database that a audit job just started, and returns a pair of
  * functions, respectively for recording a single package's results and for
  * recording that the whole job is finished.
  */
-export async function recordJobStart(jobArgs) {
+export async function recordJobStart(jobArgs, query = localQuery) {
   const pgResult = await query(
     `INSERT INTO audit_job (started_at, args)
      VALUES (NOW(), $1)
@@ -18,7 +18,7 @@ export async function recordJobStart(jobArgs) {
    * Takes an object, `resultJson`, of the type returned by `auditPackage`,
    * and records the result to the database.
    */
-  async function recordPackageAuditResult(resultJson) {
+  async function recordPackageAuditResult(resultJson, query = localQuery) {
     await query(
       `INSERT INTO package_audit
        (audit_run_id, package_name, package_version, results)
@@ -26,7 +26,7 @@ export async function recordJobStart(jobArgs) {
       [jobId, resultJson.packageName, resultJson.packageVersion, resultJson],
     );
   }
-  async function recordJobEnd() {
+  async function recordJobEnd(query = localQuery) {
     await query(
       `UPDATE audit_job
        SET finished_at = NOW()
@@ -42,7 +42,8 @@ export async function recordJobStart(jobArgs) {
  */
 // TODO: This returns an object with col names as keys.
 //       Remove note of this fact when we migrate to typescript
-export async function latestCompletedRun() {
+//       Also share return type with getRun
+export async function latestCompletedRun(query = localQuery) {
   const pgResult = await query(
     `SELECT id, started_at, finished_at, args
     FROM audit_job
@@ -53,10 +54,23 @@ export async function latestCompletedRun() {
   return pgResult.rows[0];
 }
 
+export async function getRun(runId, query = localQuery) {
+  const pgResult = await query(
+    `SELECT id, started_at, finished_at, args
+    FROM audit_job
+    WHERE id = $1`,
+    [runId],
+  );
+  if (!pgResult.rowCount) {
+    throw new Error(`No run found with id ${runId}`);
+  }
+  return pgResult.rows[0];
+}
+
 /**
  * Get all the per-package result data associated with a given audit run ID.
  */
-export async function getRunResults(runId) {
+export async function getRunResults(runId, query = localQuery) {
   const pgResult = await query(
     `SELECT results
     FROM package_audit
