@@ -3,7 +3,7 @@ import secrets from "../secrets.js";
 import { PRODUCTION_DOMAIN } from "../config.js";
 
 const DATABASE_NAME = "source_vs_npm";
-const PRODUCTION_DB_USER = "produser";
+const PRODUCTION_DB_USER = "ubuntu";
 
 // TODO: This is using peer auth to my local DB. It also only supports one DB
 //       (but we need to copy between DBs). Make flexible in due course.

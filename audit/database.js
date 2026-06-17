@@ -14,19 +14,11 @@ export async function recordJobStart(jobArgs, query = localQuery) {
   );
   const jobId = pgResult.rows[0].id;
 
-  /**
-   * Takes an object, `resultJson`, of the type returned by `auditPackage`,
-   * and records the result to the database.
-   */
-  async function recordPackageAuditResult(resultJson, query = localQuery) {
-    await query(
-      `INSERT INTO package_audit
-       (audit_run_id, package_name, package_version, results)
-       VALUES ($1, $2, $3, $4)`,
-      [jobId, resultJson.packageName, resultJson.packageVersion, resultJson],
-    );
+  async function recordPackageAuditResult(resultJson) {
+    return recordPackageAudit(jobId, resultJson, query);
   }
-  async function recordJobEnd(query = localQuery) {
+
+  async function recordJobEnd() {
     await query(
       `UPDATE audit_job
        SET finished_at = NOW()
@@ -35,6 +27,23 @@ export async function recordJobStart(jobArgs, query = localQuery) {
     );
   }
   return [recordPackageAuditResult, recordJobEnd];
+}
+
+/**
+ * Takes an object, `resultJson`, of the type returned by `auditPackage`,
+ * and records the result to the database.
+ */
+export async function recordPackageAudit(
+  jobId,
+  resultJson,
+  query = localQuery,
+) {
+  await query(
+    `INSERT INTO package_audit
+     (audit_run_id, package_name, package_version, results)
+     VALUES ($1, $2, $3, $4)`,
+    [jobId, resultJson.packageName, resultJson.packageVersion, resultJson],
+  );
 }
 
 /**
