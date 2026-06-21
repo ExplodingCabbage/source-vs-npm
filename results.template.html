@@ -133,8 +133,10 @@
 
     const logsTd = document.createElement("td");
     const logsLink = document.createElement("a");
+    // TODO: It would be better if this wasn't baked into the page and was loaded on demand
+    const logsBlob = new Blob([pkg.log]);
     logsLink.textContent = "View log";
-    logsLink.href = `./audits/${pkg.packageName}/${pkg.startTime}.log`;
+    logsLink.href = URL.createObjectURL(logsBlob);
     logsLink.target = "_blank";
     logsTd.appendChild(logsLink);
     tr.appendChild(logsTd);

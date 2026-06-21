@@ -1,47 +1,11 @@
-#!/usr/bin/env node
-import process from "node:process";
 import { promisify } from "node:util";
 import { exec, execFile } from "node:child_process";
-import { mkdir, readFile, writeFile, rm, readdir } from "node:fs/promises";
-import {
-  createWriteStream,
-  existsSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdir, readFile, rm, readdir } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import knownMismatches from "./knownMismatches.js";
 import { parsePatch } from "diff";
-import { topPackages } from "./topPackages.js";
 
-const whatToAudit = process.argv.slice(2).map((arg) => arg.toLowerCase());
-
-if (whatToAudit.length == 0) {
-  console.error("No arguments received");
-  console.error("Usage examples:");
-  console.error("  ./audit all");
-  console.error("  ./audit failing");
-  console.error("  ./audit 'build:no tag match'");
-  console.error("  ./audit 'mismatch' 'build:unexpected-error'");
-  console.error("  ./audit 'mismatch' 'benign-mismatch'");
-  console.error("  ./audit lodash");
-  console.error("  ./audit diff prettier");
-  process.exit(1);
-}
-
-// TODO: 5000
-const N_PACKAGES = 250;
-
-const packageNames = topPackages(N_PACKAGES);
-
-// Assert there are no naughty package names we can't use as directory paths:
-for (const packageName of packageNames) {
-  if (
-    packageName.split("/").includes(".") ||
-    packageName.split("/").includes("..")
-  ) {
-    throw `unexpected naughty package name in top ${N_PACKAGES}: ${packageName}`;
-  }
-}
+const repoRoot = `${import.meta.dirname}/..`;
 
 async function run(...command) {
   return await promisify(execFile)(command[0], command.slice(1));
@@ -64,9 +28,10 @@ function escapeShellArg(arg) {
   return `'${arg.replace(/'/g, `'\\''`)}'`;
 }
 
-// Before we begin, make sure we have an up-to-date version of the Docker image
-// we use for running untrusted build scripts in
-const dockerDir = `${import.meta.dirname}/docker`;
+// Module initialisation: make sure we have an up-to-date version of the Docker
+// image we use for running untrusted build scripts in. Without this, we can't
+// audit packages.
+const dockerDir = `${repoRoot}/audit/docker`;
 const imageId = (
   await run("sudo", "docker", "build", "--quiet", dockerDir)
 ).stdout.trim();
@@ -86,57 +51,30 @@ class JobFailed extends Error {
   }
 }
 
-async function auditPackage(packageName) {
-  // Create (if not exists) a folder for results/logs/diffs about this package:
-  const packageDir = `${import.meta.dirname}/audits/${packageName}`;
-  await mkdir(packageDir, { recursive: true });
-
-  async function shouldSkip() {
-    if (whatToAudit.includes("all")) {
-      return false;
-    }
-    if (whatToAudit.includes(packageName.toLowerCase())) {
-      return false;
-    }
-    const oldResultJson = JSON.parse(
-      (await readFile(`${packageDir}/results.json`)).toString(),
-    );
-    if (
-      !oldResultJson.contentMatches &&
-      !oldResultJson.isKnownBenignMismatch &&
-      whatToAudit.includes("failing")
-    ) {
-      return false;
-    }
-    if (
-      oldResultJson.contentMatches === false &&
-      whatToAudit.includes("benign-mismatch")
-    ) {
-      return false;
-    }
-    if (
-      oldResultJson.contentMatches === false &&
-      !oldResultJson.isKnownBenignMismatch &&
-      whatToAudit.includes("mismatch")
-    ) {
-      return false;
-    }
-    if (whatToAudit.includes(oldResultJson.errorCategory?.toLowerCase())) {
-      return false;
-    }
-    return true;
-  }
-
-  if (await shouldSkip()) {
-    console.log(
-      `Skipping ${packageName}. ${packageNamesQueue.length} left after this.`,
-    );
-    return;
-  }
-
-  console.log(
-    `Auditing ${packageName}. ${packageNamesQueue.length} left after this.`,
+/**
+ * Sometimes people upload packages like `@chee/..` that break the npm website
+ * and API (due to the special meaning of `.` and `..` in URLs) and also this
+ * tool's own logic when writing files to the local filesystem (due to the
+ * special meaning of `.` and `..` in Unix file paths). "Auditing" these
+ * packages is of no practical use to anybody, so we just check for them and
+ * reject attempts to audit them.
+ */
+export function isNaughty(packageName) {
+  return (
+    packageName.split("/").includes(".") ||
+    packageName.split("/").includes("..")
   );
+}
+
+export async function auditPackage(packageName) {
+  if (isNaughty(packageName)) {
+    throw `Cannot audit naughty package ${packageName}`;
+  }
+
+  // Create (if not exists) a folder to hold the downloaded and built versions
+  // of the package (to diff against each other):
+  const packageDir = `${repoRoot}/audits/${packageName}`;
+  await mkdir(packageDir, { recursive: true });
 
   // A summary of this run we will write to `packageDir`:
   const resultJson = {
@@ -147,30 +85,14 @@ async function auditPackage(packageName) {
     labels: [],
   };
 
-  // Create a log file. Timestamp in name avoids overwriting old ones.
-  const logStream = createWriteStream(
-    `${packageDir}/${resultJson.startTime}.log`,
-  );
-  let drainPromiseResolver;
-  logStream.on("drain", () => {
-    if (drainPromiseResolver) drainPromiseResolver();
-  });
-
-  async function writeStringToLog(string) {
-    if (!logStream.write(string)) {
-      const drainPromise = new Promise((resolve) => {
-        drainPromiseResolver = resolve;
-      });
-      await drainPromise;
-    }
-  }
+  const logsArray = [];
 
   // Create functions for logging and for writing final audit results:
-  async function log(...msg) {
+  function log(...msg) {
     msg.reverse();
     while (msg.length) {
-      await writeStringToLog(msg.pop().toString());
-      await writeStringToLog(msg.length > 0 ? " " : "\n");
+      logsArray.push(msg.pop().toString());
+      logsArray.push(msg.length > 0 ? " " : "\n");
     }
   }
 
@@ -179,6 +101,7 @@ async function auditPackage(packageName) {
   try {
     // Hit the npm registry to fetch data we need about the package:
     let registryRespJson;
+    // TODO: Error handling here is bad. Handle error status codes and invalid JSON.
     try {
       // We only care about the latest version, but cannot use the endpoint to
       // fetch just that version because that endpoint doesn't return the
@@ -274,17 +197,12 @@ async function auditPackage(packageName) {
     await rm(buildDir, { recursive: true, force: true });
     await mkdir(buildDir, { recursive: true });
 
-    // TODO: Spec says to check for an existing build here and skip if there is
-    //       one. Is that actually reasonable? Probably we should just check if
-    //       the package has passed the audit (earlier); if so, skip everything,
-    //       if not, do everything.
-
     // We need to clone the source and try to build it... but that entails
     // running arbitrary untrusted code, so we do it inside a Docker container,
     // created from the image we built earlier.
     // We "bind mount" an empty folder on the host to the container for the
     // container to write results to:
-    await log("Running build inside Docker. Output:");
+    log("Running build inside Docker. Output:");
     const output = (
       await runShell(
         "sudo",
@@ -300,7 +218,7 @@ async function auditPackage(packageName) {
         publishedAt,
       )
     ).stdout;
-    await log(output);
+    log(output);
 
     const buildJsonPath = `${buildDir}/buildResult.json`;
     if (!existsSync(buildJsonPath)) {
@@ -362,7 +280,7 @@ async function auditPackage(packageName) {
 
     // npm tarballs always have a top-level "package/" directory, so the final
     // step is to diff those against each other:
-    await log("Diffing", builtContentPath, "against", publishedContentPath);
+    log("Diffing", builtContentPath, "against", publishedContentPath);
     try {
       await run("diff", "-ur", builtContentPath, publishedContentPath);
       resultJson.contentMatches = true;
@@ -372,8 +290,8 @@ async function auditPackage(packageName) {
         throw "diff failed, but with no output";
       }
       resultJson.contentMatches = false;
-      await log("Mismatch! Diff:");
-      await log(diff);
+      log("Mismatch! Diff:");
+      log(diff);
 
       if (expectBenignMismatch) {
         resultJson.isKnownBenignMismatch = true;
@@ -425,13 +343,12 @@ async function auditPackage(packageName) {
           }
         }
 
-        await log(
-          "Summary of files changed:",
-          JSON.stringify(changes, null, 2),
-        );
+        log("Summary of files changed:", JSON.stringify(changes, null, 2));
 
         // Now evaluate whether every single change in the diff matches a known
         // benign reason for a mismatch to be present.
+        // TODO: Record reasons these are benign in the result object, and show
+        //       explanations in the UI.
         let dubiousChange;
         resultJson.isKnownBenignMismatch = changes.every((change) => {
           // 1. Sometimes the published version includes CHANGELOG.md or
@@ -474,7 +391,7 @@ async function auditPackage(packageName) {
           return false;
         });
         if (!resultJson.isKnownBenignMismatch) {
-          await log(
+          log(
             "Change",
             JSON.stringify(dubiousChange),
             "does not appear benign",
@@ -491,11 +408,11 @@ async function auditPackage(packageName) {
         category: e.category,
         explanation: e.explanation,
       };
-      await log("Failed with error", e.category);
+      log("Failed with error", e.category);
       if (e.error) {
-        await log(`Caused by ${e.error.__proto__.name}: ${e.error.message}`);
+        log(`Caused by ${e.error.__proto__.name}: ${e.error.message}`);
         if (e.error.stack) {
-          await log(e.error.stack);
+          log(e.error.stack);
         }
       }
     } else {
@@ -506,66 +423,23 @@ async function auditPackage(packageName) {
       };
       if (e instanceof Error) {
         if (e.stdout || e.stderr) {
-          await log(`Command failed with an error. Stack: ${e.stack}`);
+          log(`Command failed with an error. Stack: ${e.stack}`);
           if (e.stdout) {
-            await log(`stdout: ${e.stdout}`);
+            log(`stdout: ${e.stdout}`);
           }
           if (e.stderr) {
-            await log(`stderr: ${e.stderr}`);
+            log(`stderr: ${e.stderr}`);
           }
         } else {
-          await log(e.stack);
+          log(e.stack);
         }
       } else {
-        await log(e);
+        log(e);
       }
     }
-  } finally {
-    // Make sure the writeable log stream has flushed everything.
-    // I am not sure if this stuff is really necessary, because the docs kinda
-    // suck; am including it because I'm paranoid.
-    let logsAllWrittenResolve;
-    const logsAllWrittenPromise = new Promise((resolve) => {
-      logsAllWrittenResolve = resolve;
-    });
-    logStream.on("finish", logsAllWrittenResolve);
-    logStream.end();
-    await logsAllWrittenPromise;
-
-    // Write the results to disk:
-    await writeFile(`${packageDir}/results.json`, JSON.stringify(resultJson));
   }
+
+  // Finally, we stick the log onto the result JSON as a big string and return
+  resultJson.log = logsArray.join("");
+  return resultJson;
 }
-
-const MAX_SIMULTANEOUS_AUDITS = 5;
-const packageNamesQueue = [...packageNames].reverse();
-async function doAuditsUntilFinished() {
-  while (packageNamesQueue.length > 0) {
-    const packageName = packageNamesQueue.pop();
-    await auditPackage(packageName);
-  }
-}
-
-const workers = [];
-for (let i = 0; i < MAX_SIMULTANEOUS_AUDITS; i++) {
-  workers.push(doAuditsUntilFinished());
-}
-
-await Promise.all(workers);
-
-// Combine all results into a single result file:
-const allResults = packageNames.map((packageName) =>
-  JSON.parse(readFileSync(`audits/${packageName}/results.json`).toString()),
-);
-writeFileSync("allResults.json", JSON.stringify(allResults));
-
-// Populate the results template and view results
-const resultsHtml = readFileSync("./results.template.html").toString().replace(
-  "PLACEHOLDER",
-  // Escaping forward slashes, not done by JSON.stringify by default, avoids
-  // breaking out of our <script> element if allResults contains the text
-  // "</script>" in a string for some reason.
-  JSON.stringify(allResults).replaceAll("/", "\\/"),
-);
-writeFileSync("./results.html", resultsHtml);
-execFile("open", ["results.html"]);
